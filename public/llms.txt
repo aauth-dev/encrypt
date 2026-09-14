@@ -1,0 +1,31 @@
+# encrypt.aauth.dev
+
+> Sends an end-to-end encrypted message for an agent: it takes the messaging service, the recipient, and the text; fetches the recipient's key from that service, encrypts (JWE ECDH-ES A256GCM, P-256), and delivers the ciphertext there, acting for the person over an AAuth call chain. An AAuth resource (access_mode: person-token). Stateless; sees the plaintext, stores nothing. Open code, self-hostable.
+
+Reach it with the AAuth MCP: `connect_resources [{resource: "encrypt.aauth.dev"}]` (the person approves one card; this service sees plaintext), then `invoke sendMessage`.
+
+## The operation
+
+`sendMessage {resource, to, text, from?, idempotency_key?}`
+
+- `resource`: the messaging service to deliver through, as an https origin. Required. The default for agent.coop is `https://secret.agent.coop`; a person using another messaging service names it here.
+- `to`: the recipient's identifier URI as that service knows it, e.g. `mailto:bob@example.com`.
+- `text`: the message, up to 64 KB. Text only (no attachments yet).
+- `from`: one of the sender's identifier URIs at that service, optional.
+- `idempotency_key`: optional; a repeat with the same key returns the original.
+
+Returns `{id, to, from, kid, size, resource}`. Refusals from the messaging service pass through with `step`: `not_connected` (404: the person must invite them first), `recipient_has_no_key` (409: they have not finished onboarding), `rate_limited` (429). `text_too_long` (413) and `attachments_not_supported` (400) are this service's. A 502 means the chain failed (`error` is the Person Server's code, or `resource_unreachable`).
+
+The recipient reads with `getMessages` and `getMessage` at the messaging service, then `decryptEnvelope` at https://decrypt.aauth.dev.
+
+## Links
+
+- Metadata: https://encrypt.aauth.dev/.well-known/aauth-resource.json
+- Agent document (call chaining): https://encrypt.aauth.dev/.well-known/aauth-agent.json
+- OpenAPI: https://encrypt.aauth.dev/openapi.json
+- Privacy: https://encrypt.aauth.dev/privacy
+- Code and self-hosting: https://github.com/aauth-dev/encrypt
+- Container format and vectors: https://github.com/aauth-dev/decrypt-agent-coop/blob/main/spec/container.md
+- The default messaging service: https://secret.agent.coop/llms.txt
+- The matching decrypt service: https://decrypt.aauth.dev/llms.txt
+- Contact: feedback@agent.coop · abuse@agent.coop

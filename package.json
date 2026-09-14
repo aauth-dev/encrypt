@@ -1,0 +1,36 @@
+{
+  "name": "encrypt-aauth-dev",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "encrypt.aauth.dev: encrypts a message to a connected person's key and delivers it to their messaging service, as an AAuth intermediary (stateless Worker)",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "generate-key": "node scripts/generate-key.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "bash scripts/smoke.sh"
+  },
+  "dependencies": {
+    "@aauth/agent": "^4.1.0",
+    "@aauth/protocol": "^2.0.0",
+    "@aauth/resource": "^3.0.0",
+    "@hellocoop/httpsig": "^2.6.0",
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.8",
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "jose": "^6.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260911.1": true
+  }
+}

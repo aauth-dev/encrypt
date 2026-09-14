@@ -1,0 +1,37 @@
+{
+  "generator": "jose (Node)",
+  "alg": "ECDH-ES",
+  "enc": "A256GCM",
+  "crv": "P-256",
+  "kid": "Y8VCJ0wjZG0iYBIAsJNm9RGHn6vO6FVLUzDVr2omS_w",
+  "private_jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "dsMipF1MYXIl5CQY2PBYBsE9TlgNLc8JUfsJ7-4__Xg",
+    "y": "5VuOZurTN7tUs8XNA3LqrQpsEToxPs9UIV4_Gb1XQik",
+    "d": "B_DYEPqo2Kh4gUXwHYZ4XeOaK0djmUlfODRLmKoxMUI"
+  },
+  "public_jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "dsMipF1MYXIl5CQY2PBYBsE9TlgNLc8JUfsJ7-4__Xg",
+    "y": "5VuOZurTN7tUs8XNA3LqrQpsEToxPs9UIV4_Gb1XQik"
+  },
+  "plaintext": "{\"text\":\"Hello from jose. The quick brown fox jumps over the lazy dog.\",\"attachments\":[{\"name\":\"hello.txt\",\"media_type\":\"text/plain\",\"data\":\"YXR0YWNobWVudCBieXRlcwo=\"}]}",
+  "protected": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6Ilk4VkNKMHdqWkcwaVlCSUFzSk5tOVJHSG42dk82RlZMVXpEVnIyb21TX3ciLCJlcGsiOnsieCI6IjJ5UVBGQy1iV202RnlZWFJCbEZ6N0lXblhFX0xST2NsR1RVX1VGQUVaVnMiLCJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieSI6Im1lb3ZucndFS3R5UW9SU0pwcjJPaHBNTGFMWDhYMUV3dllPUjVRY1BLR28ifX0",
+  "protected_header": {
+    "alg": "ECDH-ES",
+    "enc": "A256GCM",
+    "kid": "Y8VCJ0wjZG0iYBIAsJNm9RGHn6vO6FVLUzDVr2omS_w",
+    "epk": {
+      "x": "2yQPFC-bWm6FyYXRBlFz7IWnXE_LROclGTU_UFAEZVs",
+      "crv": "P-256",
+      "kty": "EC",
+      "y": "meovnrwEKtyQoRSJpr2OhpMLaLX8X1EwvYOR5QcPKGo"
+    }
+  },
+  "iv": "hCAVJRBGGd2KTN_v",
+  "ciphertext": "NCCQSAklVB5MxUSxUWAAmp1S2TP53ZAa5UwTehf036CiINr9lqqrv8hXTGMnr0xYG7rqV-t2i6DMiMhro1l3QPPcW18saP6GQW7NT59kYcFFh7xzzLx3xrbm5DMigmLGSZaDz4b7kjTcJuxKF15ZxhPp6C1MkycQ8gOpMYofOvTVg6V9q7xPoocVjvCBrywuk_Enzm1NeDX7pfJQ7GaqZQ8FdmrEsB7lFA",
+  "tag": "EXi1Yrdi_GrpvcI5YIq2Iw",
+  "compact": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6Ilk4VkNKMHdqWkcwaVlCSUFzSk5tOVJHSG42dk82RlZMVXpEVnIyb21TX3ciLCJlcGsiOnsieCI6IjJ5UVBGQy1iV202RnlZWFJCbEZ6N0lXblhFX0xST2NsR1RVX1VGQUVaVnMiLCJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieSI6Im1lb3ZucndFS3R5UW9SU0pwcjJPaHBNTGFMWDhYMUV3dllPUjVRY1BLR28ifX0..hCAVJRBGGd2KTN_v.NCCQSAklVB5MxUSxUWAAmp1S2TP53ZAa5UwTehf036CiINr9lqqrv8hXTGMnr0xYG7rqV-t2i6DMiMhro1l3QPPcW18saP6GQW7NT59kYcFFh7xzzLx3xrbm5DMigmLGSZaDz4b7kjTcJuxKF15ZxhPp6C1MkycQ8gOpMYofOvTVg6V9q7xPoocVjvCBrywuk_Enzm1NeDX7pfJQ7GaqZQ8FdmrEsB7lFA.EXi1Yrdi_GrpvcI5YIq2Iw"
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Privacy · encrypt.aauth.dev</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="What encrypt.aauth.dev sees and stores.">
+<link rel="canonical" href="https://encrypt.aauth.dev/privacy">
+<style>
+:root{--ink:#15212b;--muted:#5b6770;--line:#d5dce3;--bg:#ffffff;--accent:#1d4ed8;--code:#f3f5f7}
+@media (prefers-color-scheme:dark){:root{--ink:#e6ebf0;--muted:#9aa6b2;--line:#2c3742;--bg:#0f151b;--accent:#8ab4ff;--code:#1a222b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;padding:32px 20px 64px}
+main{max-width:680px;margin:0 auto}h1{font-size:1.9rem;margin:0 0 .25rem}h2{font-size:1.25rem;margin:2.2rem 0 .6rem;padding-top:1rem;border-top:1px solid var(--line)}
+p{margin:.6rem 0}a{color:var(--accent)}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+code{background:var(--code);padding:.1em .35em;border-radius:4px}pre{background:var(--code);padding:12px;border-radius:6px;overflow-x:auto}
+.lede{color:var(--muted);font-size:1.05rem}ul li{margin:.35rem 0}.small{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Privacy</h1>
+<p class="lede">What <a href="/">encrypt.aauth.dev</a> sees, and what it keeps: nothing.</p>
+
+<h2>What it sees</h2>
+<ul>
+  <li><strong>The plaintext of every message it sends for you.</strong> That is the point of the service: your agent hands it text, it encrypts. The text exists in memory for one request and is not stored. This is why the service asks for your consent by name and is not folded into the messaging service's consent: anything that sees plaintext should be one you approved.</li>
+  <li><strong>The recipient's address</strong> and <strong>which messaging service</strong>, because it asks that service for the recipient's key and delivers there.</li>
+  <li><strong>Your identity as Hellō presents it to this service</strong>: a pairwise identifier, different from the one any other service sees, and not an email address. During the call it also holds a person token in your name for the messaging service, obtained from Hellō over a call chain; that token names your identity at the messaging service and is discarded when the call ends.</li>
+</ul>
+
+<h2>What it stores</h2>
+<p>Nothing. There is no database and no file store. The Worker is stateless.</p>
+
+<h2>What it logs</h2>
+<p>For each call: the time, whether it succeeded, the ciphertext size, the key id, the messaging service, a hash of your identity, and the message id the messaging service assigned. Refusals are logged with their error code. Never the text, never an address. Events go to the operator's log pipeline for reliability and abuse handling only.</p>
+
+<h2>Run your own</h2>
+<p>None of this has to be trusted to us. The code is open and runs at any origin; the messaging service accepts a message from any encrypt. See <a href="/">the front page</a>.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:feedback@agent.coop">feedback@agent.coop</a> · <a href="mailto:abuse@agent.coop">abuse@agent.coop</a>. The operator is the same as secret.agent.coop's; its policy is at <a href="https://secret.agent.coop/privacy">secret.agent.coop/privacy</a>.</p>
+</main>
+</body>
+</html>

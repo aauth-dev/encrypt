@@ -1,0 +1,37 @@
+{
+  "generator": "jwcrypto (Python)",
+  "alg": "ECDH-ES",
+  "enc": "A256GCM",
+  "crv": "P-256",
+  "kid": "3avRt7FTSdohORrQ-1iYxHZbWP1ZB0n0PwVVke2Vqgk",
+  "private_jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "sgY9PdgHTDWEUik0FsMvFAdALQovgvn_n2R61V2f2UM",
+    "y": "-Ya0LDqVbEfRvQg7x5NVkQTRaFdn_PyUC8tI5bbc2Dk",
+    "d": "PSSUwEPoMFUYqVmVIpbEV7rkqs55I_bMPrdMn4oDUMs"
+  },
+  "public_jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "sgY9PdgHTDWEUik0FsMvFAdALQovgvn_n2R61V2f2UM",
+    "y": "-Ya0LDqVbEfRvQg7x5NVkQTRaFdn_PyUC8tI5bbc2Dk"
+  },
+  "plaintext": "{\"text\":\"Hello from jwcrypto. Sphinx of black quartz, judge my vow.\",\"attachments\":[{\"name\":\"note.md\",\"media_type\":\"text/markdown\",\"data\":\"IyBub3RlCg==\"}]}",
+  "protected": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImVwayI6eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6Ikh0NWNDcWJVUEExdkVwV2cxQlVjUXdwWFB0ZnZxU3BTRXJNU2E1MmMxQ0UiLCJ5IjoiMUZKaWpqcXdlOURteXg1ckJJOWxHYWJzbU54OXJWNXBuamVNTjJXOG83YyJ9LCJraWQiOiIzYXZSdDdGVFNkb2hPUnJRLTFpWXhIWmJXUDFaQjBuMFB3VlZrZTJWcWdrIn0",
+  "protected_header": {
+    "alg": "ECDH-ES",
+    "enc": "A256GCM",
+    "epk": {
+      "crv": "P-256",
+      "kty": "EC",
+      "x": "Ht5cCqbUPA1vEpWg1BUcQwpXPtfvqSpSErMSa52c1CE",
+      "y": "1FJijjqwe9Dmyx5rBI9lGabsmNx9rV5pnjeMN2W8o7c"
+    },
+    "kid": "3avRt7FTSdohORrQ-1iYxHZbWP1ZB0n0PwVVke2Vqgk"
+  },
+  "iv": "PaGxBYlpKpwQmHmR",
+  "ciphertext": "A-Kub0-dNF3264du8y_dIl7P_V4dNoJAn2_LmD0a0wOTrrPIXpx05h3ga-QN9TLbPK2UeycUtCxoeIrEzIXKxikCV1kKRYkqzBZSp4oD_X2Ucxx5Jx-98PSZ1AB4Dk0ztwvgCrTojqTNxAHIAfgDQ45sOj3ZrbeBwHHbnoC3--dm2AaBBThVF7Z-uTvh7FuEEUgsnrWU8gO-_KM",
+  "tag": "lKhJn6ArzjM71KrLN9PYmA",
+  "compact": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImVwayI6eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6Ikh0NWNDcWJVUEExdkVwV2cxQlVjUXdwWFB0ZnZxU3BTRXJNU2E1MmMxQ0UiLCJ5IjoiMUZKaWpqcXdlOURteXg1ckJJOWxHYWJzbU54OXJWNXBuamVNTjJXOG83YyJ9LCJraWQiOiIzYXZSdDdGVFNkb2hPUnJRLTFpWXhIWmJXUDFaQjBuMFB3VlZrZTJWcWdrIn0..PaGxBYlpKpwQmHmR.A-Kub0-dNF3264du8y_dIl7P_V4dNoJAn2_LmD0a0wOTrrPIXpx05h3ga-QN9TLbPK2UeycUtCxoeIrEzIXKxikCV1kKRYkqzBZSp4oD_X2Ucxx5Jx-98PSZ1AB4Dk0ztwvgCrTojqTNxAHIAfgDQ45sOj3ZrbeBwHHbnoC3--dm2AaBBThVF7Z-uTvh7FuEEUgsnrWU8gO-_KM.lKhJn6ArzjM71KrLN9PYmA"
+}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>encrypt.aauth.dev</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Encrypts a message to a connected person's key and delivers it to your messaging service for you. Sees the plaintext, stores nothing. Open code; run your own.">
+<link rel="canonical" href="https://encrypt.aauth.dev/">
+<style>
+:root{--ink:#15212b;--muted:#5b6770;--line:#d5dce3;--bg:#ffffff;--accent:#1d4ed8;--code:#f3f5f7}
+@media (prefers-color-scheme:dark){:root{--ink:#e6ebf0;--muted:#9aa6b2;--line:#2c3742;--bg:#0f151b;--accent:#8ab4ff;--code:#1a222b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;padding:32px 20px 64px}
+main{max-width:680px;margin:0 auto}h1{font-size:1.9rem;margin:0 0 .25rem}h2{font-size:1.25rem;margin:2.2rem 0 .6rem;padding-top:1rem;border-top:1px solid var(--line)}
+p{margin:.6rem 0}a{color:var(--accent)}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+code{background:var(--code);padding:.1em .35em;border-radius:4px}pre{background:var(--code);padding:12px;border-radius:6px;overflow-x:auto}
+.lede{color:var(--muted);font-size:1.05rem}ul li{margin:.35rem 0}.small{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>encrypt.aauth.dev</h1>
+<p class="lede">Sends an end-to-end encrypted message for your agent: give it the messaging service, the recipient, and the text. It fetches the recipient's key from that service, encrypts, and delivers the ciphertext there, acting as you over an <a href="https://aauth.dev">AAuth</a> call chain. Separate code that anyone can run; the matching read side is <a href="https://decrypt.aauth.dev">decrypt.aauth.dev</a>.</p>
+
+<h2>How it is used</h2>
+<ul>
+  <li><strong>Once</strong>: your agent connects to this service (<code>connect_resources [{resource: "encrypt.aauth.dev"}]</code>). You approve one card at Hellō. It sees the plaintext of what it sends for you, so it asks by name.</li>
+  <li><strong>Each send</strong>: <code>sendMessage {resource: "https://secret.agent.coop", to: "mailto:bob@example.com", text: "…"}</code>. No script on your machine, no ciphertext through your agent. The messaging service is a parameter: <code>resource</code> is whichever one you and the recipient use.</li>
+  <li><strong>Reading</strong> is the other service: the recipient's agent fetches the ciphertext from the messaging service and has <a href="https://decrypt.aauth.dev">decrypt.aauth.dev</a> decrypt it.</li>
+</ul>
+
+<h2>What it stores and sees</h2>
+<ul>
+  <li><strong>Stores nothing.</strong> No database, no files. A message exists here for the length of one request.</li>
+  <li><strong>Sees</strong>: the plaintext you send, the recipient's address, which messaging service, and your identity as Hellō presents it to this service (a pairwise identifier, not your address). During the call it holds a token in your name for the messaging service.</li>
+  <li><strong>Logs</strong>: the time, the ciphertext size, the key id, the messaging service, a hash of your identity, and the message id the service assigned. Never the text, never the addresses.</li>
+</ul>
+<p>Details: <a href="/privacy">privacy</a>.</p>
+
+<h2>Run your own</h2>
+<p>The same Worker at any origin, on a free Cloudflare account. Nothing in it names a messaging service.</p>
+<pre>git clone https://github.com/aauth-dev/encrypt
+cd encrypt && npm install
+npm run generate-key | npx wrangler secret put SIGNING_KEY
+npm run generate-key | npx wrangler secret put AGENT_KEY
+npx wrangler deploy                              # set your own route / custom domain in wrangler.jsonc</pre>
+<p>Then <code>connect_resources</code> your host from your agent and call <code>sendMessage</code> there with the same <code>resource</code>. The messaging service does not know or care which encrypt delivered a message. You can also skip a service entirely and encrypt on your own machine: the <a href="https://github.com/aauth-dev/secret-agent-coop/tree/main/skills/secret-agent-coop">skill</a> has the scripts.</p>
+
+<h2>For agents</h2>
+<p>An <a href="https://aauth.dev">AAuth</a> resource with <code>access_mode: person-token</code>. <a href="/.well-known/aauth-resource.json"><code>/.well-known/aauth-resource.json</code></a> · <a href="/.well-known/aauth-agent.json"><code>/.well-known/aauth-agent.json</code></a> · <a href="/openapi.json"><code>/openapi.json</code></a> · <a href="/llms.txt"><code>/llms.txt</code></a>. One operation: <code>sendMessage</code>. Text only, up to 64 KB; the container format is <a href="https://github.com/aauth-dev/decrypt-agent-coop/blob/main/spec/container.md">spec/container.md</a> at decrypt.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:feedback@agent.coop">feedback@agent.coop</a> · <a href="mailto:abuse@agent.coop">abuse@agent.coop</a> · <a href="https://github.com/aauth-dev/encrypt">code</a> (MIT).</p>
+</main>
+</body>
+</html>

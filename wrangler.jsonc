@@ -1,0 +1,33 @@
+{
+  // encrypt.aauth.dev — the encrypt Worker (plan D26, Part C). Stateless:
+  // no D1, no R2, no KV. It encrypts a message to a connected person's key
+  // and delivers it to the messaging service the caller names in
+  // `resource`, acting as an AAuth intermediary (call chaining). Self-host:
+  // deploy the same Worker at your own origin (README).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "encrypt-aauth-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": true },
+
+  "routes": [{ "pattern": "encrypt.aauth.dev", "custom_domain": true }],
+  "assets": { "directory": "public", "binding": "ASSETS" },
+
+  "vars": {
+    "SERVICE": "encrypt",
+    "ORIGIN": "https://encrypt.aauth.dev"
+  },
+
+  // Events → Freezer through the shared aauth-events queue (plan item T),
+  // consumed by shipper.aauth.dev. Same as secret and decrypt.
+  "queues": { "producers": [{ "queue": "aauth-events", "binding": "EVENTS_QUEUE" }] }
+
+  // Secrets (wrangler secret put):
+  //   SIGNING_KEY — Ed25519 private JWK (npm run generate-key); signs this
+  //                 service's agent token, published at /.well-known/jwks.json
+  //   AGENT_KEY   — Ed25519 private JWK (npm run generate-key); signs the
+  //                 requests this service makes as an intermediary; cnf.jwk in
+  //                 the agent token and in the chained person token
+}
