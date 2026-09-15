@@ -67,9 +67,6 @@ npm run typecheck
 bash scripts/smoke.sh [base_url]   # live: public surface, agent document, 401 shape
 ```
 
-Until `@aauth/agent` 4.1.0 (the `upstreamToken` option) is published, `node_modules/@aauth/agent`
-is an `npm link` to `packages-js/agent` and `package-lock.json` does not list it.
-
 ## License
 
 MIT
