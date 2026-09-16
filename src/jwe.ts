@@ -1,4 +1,4 @@
-// JWE ECDH-ES + A256GCM on P-256, produced disassembled (decrypt-agent-coop
+// JWE ECDH-ES + A256GCM on P-256, produced disassembled (decrypt
 // spec/container.md; plan D18, D19), on Web Crypto directly: ephemeral
 // P-256 → ECDH → Concat KDF (RFC 7518 §4.6.2) → AES-256-GCM with the
 // base64url protected header as AAD. A port of the reference encoder,
