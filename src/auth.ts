@@ -2,7 +2,7 @@
 // auth) token, then the identity (iss, sub). No step-up here: encrypt is
 // person-token mode. The presented token is kept on the identity: it is the
 // upstream_token when this service chains to the messaging service.
-// Copied from decrypt-agent-coop/src/auth.ts.
+// Copied from decrypt/src/auth.ts.
 import type { Context, MiddlewareHandler } from 'hono'
 import {
   verify as httpSigVerify,

@@ -4,7 +4,7 @@ The send side of end-to-end encrypted agent messaging: give it the messaging ser
 recipient, and the text; it fetches the recipient's key from that service, encrypts, and delivers
 the ciphertext there, acting for the person over an AAuth call chain. This is the code that runs
 the hosted default at `encrypt.aauth.dev`, and it is what you deploy to run your own. The read side
-is [decrypt-agent-coop](https://github.com/aauth-dev/decrypt-agent-coop) (`decrypt.aauth.dev`).
+is [decrypt](https://github.com/aauth-dev/decrypt) (`decrypt.aauth.dev`).
 
 **Status: built 2026-09-14 (plan D26, Part C).** One operation, `sendMessage`; text only, 64 KB
 (D25). Nothing in the code names a messaging service: `resource` is a required parameter, and the
@@ -22,7 +22,7 @@ named only in `public/llms.txt`.
      token as `upstream_token` (call chaining; no consent card);
   3. `GET {resource}/keys?address={to}` with that token, signed with `AGENT_KEY`;
   4. encrypts `{text}` to the first key: JWE ECDH-ES + A256GCM on P-256, split per
-     [spec/container.md](https://github.com/aauth-dev/decrypt-agent-coop/blob/main/spec/container.md),
+     [spec/container.md](https://github.com/aauth-dev/decrypt/blob/main/spec/container.md),
      on Web Crypto directly (`src/jwe.ts`);
   5. `POST {resource}/messages` then `PUT {resource}/messages/{id}/blob` as `application/octet-stream`;
   6. returns `{id, to, from, kid, size, resource}`.

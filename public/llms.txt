@@ -25,7 +25,7 @@ The recipient reads with `getMessages` and `getMessage` at the messaging service
 - OpenAPI: https://encrypt.aauth.dev/openapi.json
 - Privacy: https://encrypt.aauth.dev/privacy
 - Code and self-hosting: https://github.com/aauth-dev/encrypt
-- Container format and vectors: https://github.com/aauth-dev/decrypt-agent-coop/blob/main/spec/container.md
+- Container format and vectors: https://github.com/aauth-dev/decrypt/blob/main/spec/container.md
 - The default messaging service: https://secret.agent.coop/llms.txt
 - The matching decrypt service: https://decrypt.aauth.dev/llms.txt
 - Contact: feedback@agent.coop · abuse@agent.coop
