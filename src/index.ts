@@ -1,4 +1,4 @@
-// encrypt.aauth.dev — the encrypt Worker (plan D26, Part C). Public:
+// The send service Worker (plan D26 Part C, D27 section 6). Public:
 // well-known (resource and agent), JWKS, OpenAPI, pages. Protected (person
 // token): sendMessage. Stateless.
 import { Hono } from 'hono'
@@ -28,7 +28,7 @@ app.get('/.well-known/aauth-resource.json', (c) => {
     issuer: origin,
     jwks_uri: `${origin}/.well-known/jwks.json`,
     name: new URL(origin).host,
-    description: 'Encrypts a message to a connected person\'s key and delivers it to your messaging service for you. It sees the plaintext of what it sends and stores nothing. The messaging service is a parameter; the code is open and you can run your own.',
+    description: 'A send service: encrypts a message to a connected person\'s key and uploads it to your messaging service for you. It sees the plaintext of what it sends and stores nothing. The messaging service is a parameter with a default; the code is open and you can run your own.',
     access_mode: 'person-token',
     r3_vocabularies: { 'urn:aauth:vocabulary:openapi': `${origin}/openapi.json` },
     contact: { feedback: 'feedback@agent.coop', abuse: 'abuse@agent.coop' },
@@ -39,7 +39,7 @@ app.get('/.well-known/aauth-resource.json', (c) => {
 // agent token against jwks_uri.
 app.get('/.well-known/aauth-agent.json', (c) => c.json(agentDocument(c.env.ORIGIN)))
 app.get('/.well-known/jwks.json', async (c) => c.json({ keys: [await getPublicJWK(c.env.SIGNING_KEY)] }))
-app.get('/openapi.json', (c) => c.json(openapi(c.env.ORIGIN)))
+app.get('/openapi.json', (c) => c.json(openapi(c.env)))
 app.get('/health', (c) => c.json({ status: 'ok', service: c.env.SERVICE }))
 
 app.post('/send', requireIdentity, sendMessage)

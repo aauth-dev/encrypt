@@ -1,6 +1,7 @@
 export interface Env {
   SERVICE: string
   ORIGIN: string
+  DEFAULT_RESOURCE: string // the messaging service sendMessage delivers to when the caller names none (Q7)
   SIGNING_KEY: string // Ed25519 private JWK (JSON), secret: signs the agent token
   AGENT_KEY: string // Ed25519 private JWK (JSON), secret: signs requests made as an intermediary
   ASSETS?: Fetcher

@@ -1,17 +1,19 @@
-// encrypt.aauth.dev: sendMessage end to end against the fake PS (with the
-// HTTP person_token_endpoint for the chain) and a fake messaging service at
-// a non-agent.coop host, so the target resource is proven to be a
-// parameter. The ciphertext that arrives is decrypted with jose using the
-// recipient's private key; the encoder is also checked against the
-// interop vectors' keys.
+// sendMessage (plan read-send-services section 6a) end to end against the
+// fake PS (with the HTTP person_token_endpoint for the chain) and a fake
+// messaging service at a non-agent.coop host: `resource` is a parameter and
+// its default comes from DEFAULT_RESOURCE. Every status code of 6a, the
+// key_rotated retry (5d, once), and what the messaging service sees of the
+// chain (section 10). The compact JWE that arrives is decrypted with jose
+// using the recipient's private key; the encoder is also checked against
+// the interop vectors' keys.
 import { beforeAll, describe, expect, it } from 'vitest'
 import { SELF, env } from 'cloudflare:test'
 import { clearMetadataCache } from '@aauth/resource'
 import { compactDecrypt, decodeProtectedHeader, importJWK, jwtVerify } from 'jose'
 import { Agent, FakePS, FakeSecret, RESOURCE, SECRET } from './fake-ps'
 import { agentSub, agentToken, resetAgentTokenCache } from '../src/agent-identity'
-import { encryptTo, publicP256 } from '../src/jwe'
-import { MAX_CIPHERTEXT, parseResource } from '../src/send'
+import { encryptCompact, publicP256 } from '../src/jwe'
+import { MAX_PLAINTEXT, parseResource } from '../src/send'
 import joseVector from '../spec/vectors/jose.json'
 import jwcryptoVector from '../spec/vectors/jwcrypto.json'
 
@@ -20,23 +22,19 @@ let secret: FakeSecret
 let alice: Agent
 
 const ALICE = { handle: 'alice', email: 'alice@example.com' }
+const FROM = 'mailto:alice@example.com'
 const BOB = 'mailto:bob@example.com'
 
-interface Sent { id: string; to: string; from?: string; kid: string; size: number; resource: string; replayed?: boolean }
+interface Sent { id: string; from: string; to: string; kid: string; size: number; resource: string; replayed?: boolean }
 interface Refusal { error: string; detail?: string; step?: string; resource?: string }
 
-function b64url(bytes: Uint8Array): string {
-  let s = ''
-  for (const b of bytes) s += String.fromCharCode(b)
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-/** Reassemble the disassembled JWE and decrypt it with jose. */
-async function decryptWithJose(privateJwk: JsonWebKey, m: { protected: string; iv: string; tag: string; blob?: Uint8Array }): Promise<string> {
-  const key = await importJWK(privateJwk as never, 'ECDH-ES')
-  const { plaintext } = await compactDecrypt(`${m.protected}..${m.iv}.${b64url(m.blob!)}.${m.tag}`, key)
+/** Decrypt a compact JWE with jose. */
+async function decryptWithJose(privateJwk: JsonWebKey, jwe: string): Promise<string> {
+  const { plaintext } = await compactDecrypt(jwe, await importJWK(privateJwk as never, 'ECDH-ES'))
   return new TextDecoder().decode(plaintext)
 }
+
+const send = (body: Record<string, unknown>) => alice.json<Sent & Refusal>('POST', '/send', { body })
 
 beforeAll(async () => {
   ps = await new FakePS().init()
@@ -67,10 +65,14 @@ describe('public surface', () => {
     expect(payload.dwk).toBe('aauth-agent.json')
     expect((payload.cnf as { jwk: JsonWebKey }).jwk.x).toBe((JSON.parse(env.AGENT_KEY) as JsonWebKey).x)
   })
-  it('OpenAPI has sendMessage with resource required', async () => {
-    const spec = (await (await SELF.fetch(`${RESOURCE}/openapi.json`)).json()) as { paths: Record<string, Record<string, { operationId: string; requestBody: { content: Record<string, { schema: { required: string[] } }> } }>> }
-    expect(spec.paths['/send'].post.operationId).toBe('sendMessage')
-    expect(spec.paths['/send'].post.requestBody.content['application/json'].schema.required).toEqual(['resource', 'to', 'text'])
+  it('OpenAPI has sendMessage: from, to, text required; resource optional, its default from DEFAULT_RESOURCE (Q6, Q7)', async () => {
+    const spec = (await (await SELF.fetch(`${RESOURCE}/openapi.json`)).json()) as { paths: Record<string, Record<string, { operationId: string; requestBody: { content: Record<string, { schema: { required: string[]; properties: Record<string, { description: string }> } }> } }>> }
+    const op = spec.paths['/send'].post
+    expect(op.operationId).toBe('sendMessage')
+    const schema = op.requestBody.content['application/json'].schema
+    expect(schema.required).toEqual(['from', 'to', 'text'])
+    expect(schema.properties.resource.description).toContain(env.DEFAULT_RESOURCE)
+    expect(env.DEFAULT_RESOURCE).toBe(SECRET)
   })
   it('unsigned POST /send is a person-token challenge', async () => {
     const res = await SELF.fetch(`${RESOURCE}/send`, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })
@@ -79,124 +81,152 @@ describe('public surface', () => {
   })
 })
 
-describe('sendMessage', () => {
-  it('happy path: chains for a person token, fetches the key, encrypts, delivers; the recipient decrypts with jose', async () => {
+describe('sendMessage (6a)', () => {
+  it('200: chains for a person token, getPublicKey, encrypts {text} as a compact JWE, uploadMessage; the recipient decrypts with jose', async () => {
     const bob = await secret.addRecipient(BOB)
-    const { status, body } = await alice.json<Sent>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'hello from encrypt' } })
+    const { status, body } = await send({ resource: SECRET, from: FROM, to: BOB, text: 'hello from encrypt' })
     expect(status).toBe(200)
-    expect(body.resource).toBe(SECRET)
-    expect(body.to).toBe(BOB)
-    expect(body.kid).toBe(bob.kid)
-    expect(body.id).toMatch(/^msg_/)
+    // from and to as the messaging service shows them: its display forms pass through (3c).
+    expect(body).toEqual({ id: expect.stringMatching(/^msg_/), from: 'mailto:Alice@example.com', to: 'mailto:Bob@example.com', kid: bob.kid, size: expect.any(Number), resource: SECRET })
 
-    // The chain: one person-token request with secret's agent token; the
-    // fake messaging service saw Alice's directed sub for it, not her sub here.
+    // The chain: one person-token request; the messaging service saw Alice's
+    // directed sub for it, not her sub here, and this service's agent id (10).
     expect(ps.personTokenRequests).toBe(1)
-    expect(secret.requests).toEqual(['GET /keys', 'POST /messages', `PUT /messages/${body.id}/blob`])
+    expect(secret.requests).toEqual(['GET /public-key', 'POST /messages'])
     expect(new Set(secret.seen)).toEqual(new Set([await ps.sub(ALICE, SECRET)]))
     expect(secret.seen[0]).not.toBe(await ps.sub(ALICE, RESOURCE))
 
-    // What arrived: canonical octet-stream blob whose length equals size.
     const m = secret.received[0]
-    expect(m.size).toBe(body.size)
-    expect(m.blob!.byteLength).toBe(m.size)
-    expect(m.blobContentType).toBe('application/octet-stream')
-    expect(m.kid).toBe(bob.kid)
-    expect(m.from).toBeUndefined()
+    expect(m).toMatchObject({ from: FROM, to: BOB, kid: bob.kid, agent_id: 'aauth:send@encrypt.aauth.dev' })
     expect(m.idempotency_key).toBeUndefined()
-    expect(JSON.parse(await decryptWithJose(bob.privateJwk, m))).toEqual({ text: 'hello from encrypt' })
-    // The plaintext is exactly {text}: ciphertext length is the JSON length (no padding in GCM).
-    expect(m.size).toBe(JSON.stringify({ text: 'hello from encrypt' }).length)
+    const parts = m.jwe.split('.')
+    expect(parts).toHaveLength(5)
+    expect(parts[1]).toBe('')
+    expect(body.size).toBe(m.jwe.length)
+    expect(decodeProtectedHeader(m.jwe)).toMatchObject({ alg: 'ECDH-ES', enc: 'A256GCM', kid: bob.kid, epk: { kty: 'EC', crv: 'P-256' } })
+    // The plaintext is exactly {text}.
+    expect(await decryptWithJose(bob.privateJwk, m.jwe)).toBe(JSON.stringify({ text: 'hello from encrypt' }))
   })
 
-  it('passes from and idempotency_key through; a replay whose blob is stored is not re-uploaded', async () => {
+  it('resource is optional: the default is DEFAULT_RESOURCE (Q7)', async () => {
+    const before = secret.received.length
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'to the default' })
+    expect(status).toBe(200)
+    expect(body.resource).toBe(SECRET)
+    expect(secret.received).toHaveLength(before + 1)
+  })
+
+  it('from is required (Q6); from, to, text and idempotency_key are checked before any call goes out', async () => {
+    const psBefore = ps.personTokenRequests
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['from', { to: BOB, text: 'hi' }],
+      ['from', { from: 'has space@example.com', to: BOB, text: 'hi' }],
+      ['to', { from: FROM, text: 'hi' }],
+      ['text', { from: FROM, to: BOB }],
+      ['text', { from: FROM, to: BOB, text: 42 }],
+      ['idempotency_key', { from: FROM, to: BOB, text: 'hi', idempotency_key: 'k'.repeat(65) }],
+    ]
+    for (const [field, b] of cases) {
+      const { status, body } = await send(b)
+      expect(status, JSON.stringify(b)).toBe(400)
+      expect(body).toMatchObject({ error: 'invalid_request', field })
+    }
+    expect(ps.personTokenRequests).toBe(psBefore)
+  })
+
+  it('a from that is not the caller\'s is the messaging service\'s invalid_request, passed through with step get_public_key', async () => {
+    const { status, body } = await send({ from: 'mailto:not-mine@example.com', to: BOB, text: 'hi' })
+    expect(status).toBe(400)
+    expect(body).toMatchObject({ error: 'invalid_request', field: 'from', step: 'get_public_key', resource: SECRET })
+  })
+
+  it('an envelope layer around the fields is refused: {body: {…}} has no from (13b step 7)', async () => {
+    const { status, body } = await send({ body: { from: FROM, to: BOB, text: 'hi' } })
+    expect(status).toBe(400)
+    expect(body).toMatchObject({ error: 'invalid_request', field: 'from' })
+  })
+
+  it('passes idempotency_key through; a replay returns the first message with replayed: true', async () => {
     const bob = secret.recipients.get(BOB)!
     const before = secret.received.length
-    const first = await alice.json<Sent>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'twice', from: 'mailto:alice@work.example', idempotency_key: 'k-1' } })
+    const first = await send({ from: 'mailto:alice@work.example', to: BOB, text: 'twice', idempotency_key: 'k-1' })
     expect(first.status).toBe(200)
     const m = secret.received[before]
-    expect(m.from).toBe('mailto:alice@work.example')
-    expect(m.idempotency_key).toBe('k-1')
-    expect(JSON.parse(await decryptWithJose(bob.privateJwk, m))).toEqual({ text: 'twice' })
-    const requests = secret.requests.length
-    const again = await alice.json<Sent>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'twice', from: 'mailto:alice@work.example', idempotency_key: 'k-1' } })
+    expect(m).toMatchObject({ from: 'mailto:alice@work.example', idempotency_key: 'k-1' })
+    expect(JSON.parse(await decryptWithJose(bob.privateJwk, m.jwe))).toEqual({ text: 'twice' })
+    const again = await send({ from: 'mailto:alice@work.example', to: BOB, text: 'twice', idempotency_key: 'k-1' })
     expect(again.status).toBe(200)
-    expect(again.body.id).toBe(first.body.id)
-    expect(again.body.replayed).toBe(true)
+    expect(again.body).toEqual({ ...first.body, replayed: true })
     expect(secret.received).toHaveLength(before + 1)
-    expect(secret.requests.slice(requests)).toEqual(['GET /keys', 'POST /messages'])
   })
 
-  it('not_connected passes through verbatim', async () => {
-    const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: 'mailto:stranger@example.com', text: 'hi' } })
+  it('404 not_connected passes through with step get_public_key', async () => {
+    const { status, body } = await send({ from: FROM, to: 'mailto:stranger@example.com', text: 'hi' })
     expect(status).toBe(404)
-    expect(body.error).toBe('not_connected')
-    expect(body.step).toBe('get_keys')
-    expect(body.resource).toBe(SECRET)
+    expect(body).toMatchObject({ error: 'not_connected', step: 'get_public_key', resource: SECRET })
   })
 
-  it('recipient_has_no_key passes through verbatim', async () => {
+  it('409 recipient_has_no_key passes through with step get_public_key', async () => {
     secret.connected.add('mailto:keyless@example.com')
-    const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: 'mailto:keyless@example.com', text: 'hi' } })
+    const { status, body } = await send({ from: FROM, to: 'mailto:keyless@example.com', text: 'hi' })
     expect(status).toBe(409)
-    expect(body.error).toBe('recipient_has_no_key')
-    expect(body.step).toBe('get_keys')
+    expect(body).toMatchObject({ error: 'recipient_has_no_key', step: 'get_public_key' })
   })
 
-  it('a refusal from sendMessage at the messaging service passes through (rate_limited)', async () => {
-    secret.failNextSend = { status: 429, error: 'rate_limited', detail: '100 messages per hour' }
-    const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'hi' } })
+  it('429 rate_limited passes through with step upload_message', async () => {
+    secret.failNextUpload = { status: 429, error: 'rate_limited', detail: '100 messages per hour' }
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'hi' })
     expect(status).toBe(429)
-    expect(body.error).toBe('rate_limited')
-    expect(body.detail).toBe('100 messages per hour')
-    expect(body.step).toBe('send_message')
+    expect(body).toMatchObject({ error: 'rate_limited', detail: '100 messages per hour', step: 'upload_message', resource: SECRET })
   })
 
-  it('text over 64 KB is refused before any call goes out', async () => {
+  it('413 too_large from the messaging service passes through with step upload_message', async () => {
+    secret.failNextUpload = { status: 413, error: 'too_large' }
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'hi' })
+    expect(status).toBe(413)
+    expect(body).toMatchObject({ error: 'too_large', step: 'upload_message' })
+  })
+
+  it('413 text_too_long: over 64 KB is refused before any call goes out; 64 KB fits in a 96 KB JWE', async () => {
     const psBefore = ps.personTokenRequests
     const reqBefore = secret.requests.length
-    const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'x'.repeat(MAX_CIPHERTEXT) } })
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'x'.repeat(MAX_PLAINTEXT) })
     expect(status).toBe(413)
     expect(body.error).toBe('text_too_long')
     expect(ps.personTokenRequests).toBe(psBefore)
     expect(secret.requests).toHaveLength(reqBefore)
-    // Just under the cap goes through.
-    const ok = await alice.json<Sent>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'y'.repeat(MAX_CIPHERTEXT - '{"text":""}'.length) } })
+    // Just under the cap goes through, and the compact JWE is within the messaging service's 96 KB (8b).
+    const ok = await send({ from: FROM, to: BOB, text: 'y'.repeat(MAX_PLAINTEXT - '{"text":""}'.length) })
     expect(ok.status).toBe(200)
-    expect(ok.body.size).toBe(MAX_CIPHERTEXT)
+    expect(ok.body.size).toBeLessThanOrEqual(98_304)
+    expect(ok.body.size).toBeGreaterThan(86_000)
   })
 
-  it('attachments are refused (D25)', async () => {
+  it('attachments are refused (Q8)', async () => {
     const psBefore = ps.personTokenRequests
-    const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'hi', attachments: [{ name: 'a.txt', media_type: 'text/plain', data: 'YQ==' }] } })
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'hi', attachments: [{ name: 'a.txt', media_type: 'text/plain', data: 'YQ==' }] })
     expect(status).toBe(400)
     expect(body.error).toBe('attachments_not_supported')
     expect(ps.personTokenRequests).toBe(psBefore)
   })
 
-  it('resource must be an https origin; to and text are required', async () => {
-    for (const resource of [undefined, 'secret.agent.coop', 'http://secret.fake.test', 'https://secret.fake.test/', 'https://secret.fake.test/messages', 'https://u:p@secret.fake.test']) {
-      const { status, body } = await alice.json<Refusal & { field: string }>('POST', '/send', { body: { resource, to: BOB, text: 'hi' } })
+  it('resource, when given, must be an https origin', async () => {
+    for (const resource of ['secret.agent.coop', 'http://secret.fake.test', 'https://secret.fake.test/', 'https://secret.fake.test/messages', 'https://u:p@secret.fake.test', null, 7]) {
+      const { status, body } = await send({ resource, from: FROM, to: BOB, text: 'hi' })
       expect(status, String(resource)).toBe(400)
-      expect(body.error).toBe('invalid_request')
-      expect(body.field).toBe('resource')
+      expect(body).toMatchObject({ error: 'invalid_request', field: 'resource' })
     }
     expect(parseResource('https://secret.agent.coop')).toBe('https://secret.agent.coop')
     expect(parseResource('https://Secret.Agent.Coop')).toBeNull()
-    const noTo = await alice.json<Refusal & { field: string }>('POST', '/send', { body: { resource: SECRET, text: 'hi' } })
-    expect(noTo.body.field).toBe('to')
-    const noText = await alice.json<Refusal & { field: string }>('POST', '/send', { body: { resource: SECRET, to: BOB } })
-    expect(noText.body.field).toBe('text')
   })
 
-  it('the PS refusing the upstream token (wrong aud) is a 502 with the PS error code', async () => {
+  it('502 step person_token: the PS refusing the upstream token (wrong aud) carries the PS error code', async () => {
     ps.expectedIntermediary = 'https://other.example'
     try {
       const reqBefore = secret.requests.length
-      const { status, body } = await alice.json<Refusal>('POST', '/send', { body: { resource: SECRET, to: BOB, text: 'hi' } })
+      const { status, body } = await send({ from: FROM, to: BOB, text: 'hi' })
       expect(status).toBe(502)
-      expect(body.error).toBe('invalid_upstream_token')
-      expect(body.step).toBe('person_token')
+      expect(body).toMatchObject({ error: 'invalid_upstream_token', step: 'person_token', resource: SECRET })
       expect(secret.requests).toHaveLength(reqBefore)
     } finally {
       ps.expectedIntermediary = undefined
@@ -205,28 +235,71 @@ describe('sendMessage', () => {
 
   it('a person token for another audience is refused before anything else', async () => {
     const jwt = await ps.personToken(ALICE, alice.key, 'https://other.example')
-    const res = await alice.signed(jwt, 'POST', `${RESOURCE}/send`, { body: { resource: SECRET, to: BOB, text: 'hi' } })
+    const res = await alice.signed(jwt, 'POST', `${RESOURCE}/send`, { body: { from: FROM, to: BOB, text: 'hi' } })
     expect(res.status).toBe(401)
     expect(((await res.json()) as { error: string }).error).toBe('aud_mismatch')
   })
 })
 
+describe('the key_rotated retry (5d, Q3)', () => {
+  it('a key rotated between getPublicKey and uploadMessage: fetches the key again and retries once; the message is to the new key', async () => {
+    const old = secret.recipients.get(BOB)!
+    const requests = secret.requests.length
+    const received = secret.received.length
+    secret.rotateBeforeUploads = 1
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'after the rotation' })
+    expect(status).toBe(200)
+    const latest = secret.recipients.get(BOB)!
+    expect(latest.kid).not.toBe(old.kid)
+    expect(body.kid).toBe(latest.kid)
+    expect(secret.requests.slice(requests)).toEqual(['GET /public-key', 'POST /messages', 'GET /public-key', 'POST /messages'])
+    expect(secret.received).toHaveLength(received + 1)
+    const m = secret.received.at(-1)!
+    expect(m.kid).toBe(latest.kid)
+    expect(JSON.parse(await decryptWithJose(latest.privateJwk, m.jwe))).toEqual({ text: 'after the rotation' })
+    await expect(decryptWithJose(old.privateJwk, m.jwe)).rejects.toThrow()
+  })
+
+  it('once: a second key_rotated passes through as 409 with step upload_message', async () => {
+    const requests = secret.requests.length
+    const received = secret.received.length
+    secret.rotateBeforeUploads = 2
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'rotating forever' })
+    expect(status).toBe(409)
+    expect(body).toMatchObject({ error: 'key_rotated', kid: secret.recipients.get(BOB)!.kid, step: 'upload_message', resource: SECRET })
+    expect(secret.requests.slice(requests)).toEqual(['GET /public-key', 'POST /messages', 'GET /public-key', 'POST /messages'])
+    expect(secret.received).toHaveLength(received)
+    expect(secret.rotateBeforeUploads).toBe(0)
+  })
+
+  it('another 409 is not retried', async () => {
+    const requests = secret.requests.length
+    secret.failNextUpload = { status: 409, error: 'recipient_has_no_key' }
+    const { status, body } = await send({ from: FROM, to: BOB, text: 'hi' })
+    expect(status).toBe(409)
+    expect(body).toMatchObject({ error: 'recipient_has_no_key', step: 'upload_message' })
+    expect(secret.requests.slice(requests)).toEqual(['GET /public-key', 'POST /messages'])
+  })
+})
+
 describe('the encoder against the interop vectors', () => {
-  for (const v of [joseVector, jwcryptoVector] as Array<{ generator: string; kid: string; public_jwk: JsonWebKey; private_jwk: JsonWebKey; plaintext: string; protected_header: Record<string, unknown> }>) {
-    it(`encrypts to the ${v.generator} vector's key and its private key decrypts it (jose)`, async () => {
-      const env = await encryptTo(v.public_jwk, v.kid, new TextEncoder().encode(v.plaintext))
-      const header = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(env.protected.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)))) as Record<string, unknown>
+  for (const v of [joseVector, jwcryptoVector] as Array<{ generator: string; kid: string; public_jwk: JsonWebKey; private_jwk: JsonWebKey; plaintext: string; compact: string; protected_header: Record<string, unknown> }>) {
+    it(`encrypts to the ${v.generator} vector's key as a compact JWE and its private key decrypts it (jose)`, async () => {
+      const jwe = await encryptCompact(v.public_jwk, v.kid, new TextEncoder().encode(v.plaintext))
+      const header = decodeProtectedHeader(jwe) as Record<string, unknown>
       expect(header.alg).toBe(v.protected_header.alg)
       expect(header.enc).toBe(v.protected_header.enc)
       expect(header.kid).toBe(v.kid)
       expect((header.epk as JsonWebKey).crv).toBe('P-256')
-      expect(env.ciphertext.byteLength).toBe(new TextEncoder().encode(v.plaintext).byteLength)
-      expect(await decryptWithJose(v.private_jwk, { ...env, blob: env.ciphertext })).toBe(v.plaintext)
+      // Same shape as the vector's own compact string: five parts, the second empty, the same ciphertext length.
+      const [ours, theirs] = [jwe.split('.'), v.compact.split('.')]
+      expect(ours.map((p) => p.length).slice(1)).toEqual(theirs.map((p) => p.length).slice(1))
+      expect(await decryptWithJose(v.private_jwk, jwe)).toBe(v.plaintext)
     })
   }
   it('refuses a key that is not a public P-256 JWK', async () => {
     expect(publicP256({ kty: 'EC', crv: 'P-384', x: 'a', y: 'b' })).toBeNull()
     expect(publicP256({ ...joseVector.public_jwk, d: 'x' })).toBeNull()
-    await expect(encryptTo({ kty: 'OKP', crv: 'Ed25519', x: 'a' } as JsonWebKey, 'k', new Uint8Array(1))).rejects.toMatchObject({ code: 'invalid_recipient_key' })
+    await expect(encryptCompact({ kty: 'OKP', crv: 'Ed25519', x: 'a' } as JsonWebKey, 'k', new Uint8Array(1))).rejects.toMatchObject({ code: 'invalid_recipient_key' })
   })
 })

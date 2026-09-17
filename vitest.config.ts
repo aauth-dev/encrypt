@@ -9,7 +9,8 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },
-      miniflare: { bindings: { SIGNING_KEY: TEST_SIGNING_KEY, AGENT_KEY: TEST_AGENT_KEY } },
+      // DEFAULT_RESOURCE is the fake messaging service, not a production host: the default comes from config.
+      miniflare: { bindings: { SIGNING_KEY: TEST_SIGNING_KEY, AGENT_KEY: TEST_AGENT_KEY, DEFAULT_RESOURCE: 'https://secret.fake.test' } },
     }),
   ],
   test: { include: ['test/**/*.test.ts'] },

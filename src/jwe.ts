@@ -1,18 +1,9 @@
-// JWE ECDH-ES + A256GCM on P-256, produced disassembled (decrypt
-// spec/container.md; plan D18, D19), on Web Crypto directly: ephemeral
-// P-256 → ECDH → Concat KDF (RFC 7518 §4.6.2) → AES-256-GCM with the
-// base64url protected header as AAD. A port of the reference encoder,
-// secret-agent-coop/skills/secret-agent-coop/scripts/encrypt.mjs.
+// JWE ECDH-ES + A256GCM on P-256 in compact serialization (decrypt
+// spec/container.md; plan D19, D27 section 8a), on Web Crypto directly:
+// ephemeral P-256 → ECDH → Concat KDF (RFC 7518 §4.6.2) → AES-256-GCM with
+// the base64url protected header as AAD. No library, so jose decrypting
+// what this produces is a cross-implementation check.
 import { b64urlEncode } from './util'
-
-export interface Envelope {
-  /** base64url protected header, verbatim (it is the AAD) */
-  protected: string
-  iv: string
-  tag: string
-  ciphertext: Uint8Array
-  kid: string
-}
 
 export class JweError extends Error {
   constructor(readonly code: string, message: string) {
@@ -59,8 +50,12 @@ export function publicP256(jwk: unknown): JsonWebKey | null {
   return { kty: 'EC', crv: 'P-256', x: k.x, y: k.y }
 }
 
-/** Encrypt `plaintext` to the recipient's key. `kid` goes into the protected header verbatim. */
-export async function encryptTo(recipientJwk: JsonWebKey, kid: string, plaintext: Uint8Array): Promise<Envelope> {
+/**
+ * Encrypt `plaintext` to the recipient's key as a compact JWE:
+ * `protected..iv.ciphertext.tag`, the encrypted key part empty for ECDH-ES
+ * direct key agreement. `kid` goes into the protected header verbatim.
+ */
+export async function encryptCompact(recipientJwk: JsonWebKey, kid: string, plaintext: Uint8Array): Promise<string> {
   const pub = publicP256(recipientJwk)
   if (!pub) throw new JweError('invalid_recipient_key', 'recipient key must be a public EC P-256 JWK')
   let recipient: CryptoKey
@@ -80,11 +75,5 @@ export async function encryptTo(recipientJwk: JsonWebKey, kid: string, plaintext
   const out = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(protectedB64), tagLength: 128 }, cek, plaintext as BufferSource),
   )
-  return {
-    protected: protectedB64,
-    iv: b64urlEncode(iv),
-    tag: b64urlEncode(out.slice(out.length - 16)),
-    ciphertext: out.slice(0, out.length - 16),
-    kid,
-  }
+  return `${protectedB64}..${b64urlEncode(iv)}.${b64urlEncode(out.slice(0, out.length - 16))}.${b64urlEncode(out.slice(out.length - 16))}`
 }

@@ -1,8 +1,8 @@
 {
   // encrypt.aauth.dev — the encrypt Worker (plan D26, Part C). Stateless:
   // no D1, no R2, no KV. It encrypts a message to a connected person's key
-  // and delivers it to the messaging service the caller names in
-  // `resource`, acting as an AAuth intermediary (call chaining). Self-host:
+  // and delivers it to the messaging service in `resource` (default
+  // DEFAULT_RESOURCE), acting as an AAuth intermediary (call chaining). Self-host:
   // deploy the same Worker at your own origin (README).
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "encrypt-aauth-dev",
@@ -17,7 +17,10 @@
 
   "vars": {
     "SERVICE": "encrypt",
-    "ORIGIN": "https://encrypt.aauth.dev"
+    "ORIGIN": "https://encrypt.aauth.dev",
+    // The messaging service sendMessage delivers to when the caller gives no
+    // `resource` (D27, Q7). The only place it is named.
+    "DEFAULT_RESOURCE": "https://secret.agent.coop"
   },
 
   // Events → Freezer through the shared aauth-events queue (plan item T),

@@ -9,9 +9,10 @@
 // interaction. Its documents are served through a mocked global fetch.
 //
 // Also here: a fake messaging service at SECRET (deliberately not an
-// agent.coop host: the Worker under test must take the target as a
-// parameter) with /keys, /messages, /messages/{id}/blob, verifying the
-// signature and the chained person token and recording what arrived.
+// agent.coop host: the Worker under test must take the target from the
+// request or from DEFAULT_RESOURCE) with getPublicKey and uploadMessage,
+// verifying the signature and the chained person token and recording what
+// arrived.
 //
 // Also here: an Agent that plays the AAuth MCP against the Worker under
 // test — signs requests with RFC 9421 (jwt scheme) and follows
@@ -212,8 +213,10 @@ export class FakePS {
     const person = typeof upstream.sub === 'string' ? this.subs.get(upstream.sub) : undefined
     if (!person) return problem(400, 'invalid_upstream_token', 'unknown sub')
 
+    // Hellō puts the agent the token is issued to on person tokens for the
+    // messaging service (Wallet passthrough-claims.js): here, the intermediary.
     const personToken = await this.sign('aa-person+jwt', {
-      iss: this.iss, dwk: 'aauth-person.json', aud: params.resource, sub: await this.sub(person, params.resource), cnf: { jwk: cnf },
+      iss: this.iss, dwk: 'aauth-person.json', aud: params.resource, sub: await this.sub(person, params.resource), cnf: { jwk: cnf }, agent_id: agent.sub,
     }, 600)
     return Response.json({ person_token: personToken, expires_in: 600 })
   }
@@ -286,8 +289,11 @@ export interface Person {
 // ── The fake messaging service ──
 // What encrypt chains to. Verifies the signature and the chained person
 // token (issued by the fake PS, aud SECRET, cnf = the signing key), then
-// behaves like secret.agent.coop's getKeys, sendMessage, and putBlob for a
-// small in-memory world: `recipients` with a key, `connected` addresses.
+// behaves like secret.agent.coop's getPublicKey and uploadMessage (plan
+// read-send-services sections 4b, 5a) for a small in-memory world:
+// `recipients` with one latest key each, `connected` addresses, `mine` the
+// sender's addresses. rotate() replaces a recipient's key, so the next
+// upload to the old kid is 409 key_rotated.
 
 export interface RecipientKey {
   kid: string
@@ -297,53 +303,71 @@ export interface RecipientKey {
 }
 export interface ReceivedMessage {
   id: string
+  from: string
   to: string
-  from?: string
-  protected: string
-  iv: string
-  tag: string
-  size: number
+  jwe: string
   kid: string
   idempotency_key?: string
-  blob?: Uint8Array
-  blobContentType?: string
-  /** the sub the chained person token carried */
+  /** the sub and agent_id the chained person token carried */
   sub: string
+  agent_id: unknown
 }
+
+const MAX_JWE = 98_304
+/** the display form the fake shows for any address: what secret does with identifiers.email */
+const display = (address: string) => address.replace(/^mailto:(.)/i, (_m, c: string) => `mailto:${c.toUpperCase()}`)
 
 export class FakeSecret {
   readonly origin = SECRET
   recipients = new Map<string, RecipientKey>()
+  /** every private key a recipient has had, by kid: a read service keeps them all */
+  privateKeys = new Map<string, JsonWebKey>()
   connected = new Set<string>()
+  /** the sender's verified addresses, lowercased */
+  mine = new Set<string>(['mailto:alice@example.com', 'mailto:alice@work.example'])
   received: ReceivedMessage[] = []
   /** "METHOD path" of every authenticated request, in order */
   requests: string[] = []
   /** subs seen on chained person tokens */
   seen: string[] = []
-  /** the next POST /messages answers with this */
-  failNextSend?: { status: number; error: string; detail?: string }
+  /** the next uploadMessage answers with this */
+  failNextUpload?: { status: number; error: string; detail?: string }
+  /** rotate the recipient's key this many times, each just before an upload is checked: the race 5d describes */
+  rotateBeforeUploads = 0
   private counter = 0
 
   constructor(readonly ps: FakePS) {
     installMockFetch()
-    routes.set(`${SECRET}/keys`, (req) => this.getKeys(req))
-    routes.set(`${SECRET}/messages`, (req) => this.postMessage(req))
-    prefixRoutes.set(`${SECRET}/messages/`, (req) => this.putBlob(req))
+    routes.set(`${SECRET}/public-key`, (req) => this.getPublicKey(req))
+    routes.set(`${SECRET}/messages`, (req) => this.uploadMessage(req))
   }
 
-  /** A connected person with a registered key. Returns the key so tests can decrypt. */
-  async addRecipient(address: string): Promise<RecipientKey> {
+  private async mint(): Promise<RecipientKey> {
     const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair
     const priv = (await crypto.subtle.exportKey('jwk', pair.privateKey)) as JsonWebKey
     const jwk: JsonWebKey = { kty: 'EC', crv: 'P-256', x: priv.x, y: priv.y }
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({ crv: 'P-256', kty: 'EC', x: jwk.x, y: jwk.y })))
     const key: RecipientKey = { kid: b64url(new Uint8Array(digest)), alg: 'ECDH-ES', jwk, privateJwk: { ...jwk, d: priv.d } }
-    this.recipients.set(address, key)
-    this.connected.add(address)
+    this.privateKeys.set(key.kid, key.privateJwk)
     return key
   }
 
-  private async auth(req: Request): Promise<{ sub: string; body?: Uint8Array } | Response> {
+  /** A connected person with a key. Returns the key so tests can decrypt. */
+  async addRecipient(address: string): Promise<RecipientKey> {
+    const key = await this.mint()
+    this.recipients.set(address.toLowerCase(), key)
+    this.connected.add(address.toLowerCase())
+    return key
+  }
+
+  /** The recipient rotated: a new latest key; the old kid is refused from now on. */
+  async rotate(address: string): Promise<RecipientKey> {
+    const key = await this.mint()
+    this.recipients.set(address.toLowerCase(), key)
+    return key
+  }
+
+  private async auth(req: Request): Promise<{ sub: string; agent_id: unknown; body?: Uint8Array } | Response> {
     const { sig, body } = await verifySigned(req)
     if (!sig.verified) return problem(401, 'signature_verification_failed', sig.error ?? 'bad signature')
     if (sig.keyType !== 'jwt' || !sig.jwt) return problem(401, 'person_token_required', 'sig=jwt required')
@@ -358,69 +382,58 @@ export class FakeSecret {
     const url = new URL(req.url)
     this.requests.push(`${req.method} ${url.pathname}`)
     this.seen.push(String(claims.sub))
-    return { sub: String(claims.sub), body }
+    return { sub: String(claims.sub), agent_id: claims.agent_id, body }
   }
 
-  private async getKeys(req: Request): Promise<Response> {
+  private async getPublicKey(req: Request): Promise<Response> {
     const a = await this.auth(req)
     if (a instanceof Response) return a
-    const address = new URL(req.url).searchParams.get('address') ?? ''
-    if (!this.connected.has(address)) return Response.json({ error: 'not_connected', detail: 'no connection with that address' }, { status: 404 })
-    const key = this.recipients.get(address)
-    if (!key) return Response.json({ error: 'recipient_has_no_key', detail: 'the recipient has not registered a public key yet' }, { status: 409 })
-    return Response.json({ address, keys: [{ kid: key.kid, alg: key.alg, jwk: key.jwk, created_at: new Date().toISOString() }] })
+    const q = new URL(req.url).searchParams
+    const from = (q.get('from') ?? '').toLowerCase()
+    const to = (q.get('to') ?? '').toLowerCase()
+    if (!this.mine.has(from)) return Response.json({ error: 'invalid_request', field: 'from', detail: 'from is required and must be one of your verified addresses' }, { status: 400 })
+    if (!this.connected.has(to)) return Response.json({ error: 'not_connected', detail: 'no connection with that address' }, { status: 404 })
+    const key = this.recipients.get(to)
+    if (!key) return Response.json({ error: 'recipient_has_no_key', detail: 'the recipient has no public key yet' }, { status: 409 })
+    return Response.json({ from: display(from), to: display(to), kid: key.kid, alg: key.alg, jwk: key.jwk })
   }
 
-  private async postMessage(req: Request): Promise<Response> {
+  private async uploadMessage(req: Request): Promise<Response> {
     const a = await this.auth(req)
     if (a instanceof Response) return a
     if (!(req.headers.get('content-type') ?? '').startsWith('application/json')) return problem(400, 'invalid_json', 'application/json required')
-    if (this.failNextSend) {
-      const f = this.failNextSend
-      this.failNextSend = undefined
+    if (this.failNextUpload) {
+      const f = this.failNextUpload
+      this.failNextUpload = undefined
       return Response.json({ error: f.error, detail: f.detail ?? f.error }, { status: f.status })
     }
     const m = JSON.parse(new TextDecoder().decode(a.body)) as Record<string, unknown>
     if (typeof m.idempotency_key === 'string') {
       const prior = this.received.find((r) => r.idempotency_key === m.idempotency_key && r.sub === a.sub)
-      if (prior) return Response.json({ id: prior.id, to: prior.to, from: prior.from, size: prior.size, kid: prior.kid, replayed: true, ...(prior.blob ? { blob_at: new Date().toISOString() } : {}) })
+      if (prior) return Response.json({ id: prior.id, from: display(prior.from), to: display(prior.to), kid: prior.kid, size: prior.jwe.length, replayed: true })
     }
-    const to = String(m.to)
+    if (typeof m.jwe !== 'string') return Response.json({ error: 'invalid_jwe', detail: 'jwe must be a compact JWE string' }, { status: 400 })
+    if (m.jwe.length > MAX_JWE) return Response.json({ error: 'too_large' }, { status: 413 })
+    const parts = m.jwe.split('.')
+    if (parts.length !== 5 || parts[1] !== '') return Response.json({ error: 'invalid_jwe', detail: 'not compact' }, { status: 400 })
+    const header = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[0]))) as Record<string, unknown>
+    if (header.alg !== 'ECDH-ES' || header.enc !== 'A256GCM' || typeof header.kid !== 'string' || !header.epk) return Response.json({ error: 'invalid_jwe', detail: 'header' }, { status: 400 })
+    const from = String(m.from ?? '').toLowerCase()
+    const to = String(m.to ?? '').toLowerCase()
+    if (!this.mine.has(from)) return Response.json({ error: 'invalid_request', field: 'from' }, { status: 400 })
     if (!this.connected.has(to)) return Response.json({ error: 'not_connected' }, { status: 404 })
+    if (this.rotateBeforeUploads > 0) {
+      this.rotateBeforeUploads--
+      await this.rotate(to)
+    }
     const key = this.recipients.get(to)
     if (!key) return Response.json({ error: 'recipient_has_no_key' }, { status: 409 })
-    for (const [f, len] of [['iv', 12], ['tag', 16]] as const) {
-      const v = m[f]
-      if (typeof v !== 'string' || b64urlDecode(v).length !== len) return Response.json({ error: 'invalid_envelope', field: f }, { status: 400 })
-    }
-    if (typeof m.protected !== 'string') return Response.json({ error: 'invalid_envelope', field: 'protected' }, { status: 400 })
-    const header = JSON.parse(new TextDecoder().decode(b64urlDecode(m.protected))) as Record<string, unknown>
-    if (header.alg !== 'ECDH-ES' || header.enc !== 'A256GCM') return Response.json({ error: 'invalid_envelope', field: 'protected', detail: 'alg/enc' }, { status: 400 })
-    if (header.kid !== key.kid) return Response.json({ error: 'unknown_kid', keys: [key.kid] }, { status: 409 })
-    const epk = header.epk as Record<string, unknown> | undefined
-    if (!epk || epk.kty !== 'EC' || epk.crv !== 'P-256') return Response.json({ error: 'invalid_envelope', field: 'protected', detail: 'epk' }, { status: 400 })
-    const size = m.size
-    if (typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > 1_048_576) return Response.json({ error: 'invalid_request', field: 'size' }, { status: 400 })
+    if (header.kid !== key.kid) return Response.json({ error: 'key_rotated', detail: "kid is not the recipient's latest key; call getPublicKey again", kid: key.kid }, { status: 409 })
     const id = `msg_fake${String(++this.counter).padStart(20, '0')}_000`
-    const rec: ReceivedMessage = { id, to, from: typeof m.from === 'string' ? m.from : undefined, protected: m.protected, iv: m.iv as string, tag: m.tag as string, size, kid: key.kid, idempotency_key: typeof m.idempotency_key === 'string' ? m.idempotency_key : undefined, sub: a.sub }
+    const rec: ReceivedMessage = { id, from, to, jwe: m.jwe, kid: key.kid, idempotency_key: typeof m.idempotency_key === 'string' ? m.idempotency_key : undefined, sub: a.sub, agent_id: a.agent_id }
     this.received.push(rec)
-    return Response.json({ id, to, from: rec.from ?? 'mailto:sender@fake.test', size, kid: key.kid, state: 'new', upload_until: new Date(Date.now() + 600_000).toISOString() }, { status: 201 })
-  }
-
-  private async putBlob(req: Request): Promise<Response> {
-    const a = await this.auth(req)
-    if (a instanceof Response) return a
-    const m = /\/messages\/([^/]+)\/blob$/.exec(new URL(req.url).pathname)
-    const rec = m && this.received.find((r) => r.id === decodeURIComponent(m[1]))
-    if (!rec) return Response.json({ error: 'not_found' }, { status: 404 })
-    if (rec.blob) return Response.json({ error: 'blob_exists' }, { status: 409 })
-    const ct = req.headers.get('content-type') ?? ''
-    if (!ct.startsWith('application/octet-stream')) return Response.json({ error: 'invalid_request', detail: `expected the canonical octet-stream body, got ${ct}` }, { status: 400 })
-    const bytes = a.body ?? new Uint8Array()
-    if (bytes.byteLength !== rec.size) return Response.json({ error: 'size_mismatch', detail: `declared ${rec.size} bytes, received ${bytes.byteLength}` }, { status: 409 })
-    rec.blob = bytes
-    rec.blobContentType = ct
-    return Response.json({ id: rec.id, to: rec.to, size: rec.size, blob_at: new Date().toISOString() })
+    const now = Date.now()
+    return Response.json({ id, from: display(from), to: display(to), kid: key.kid, size: m.jwe.length, created_at: new Date(now).toISOString(), expires_at: new Date(now + 30 * 86_400_000).toISOString() }, { status: 201 })
   }
 }
 

@@ -3,35 +3,31 @@
   "alg": "ECDH-ES",
   "enc": "A256GCM",
   "crv": "P-256",
-  "kid": "3avRt7FTSdohORrQ-1iYxHZbWP1ZB0n0PwVVke2Vqgk",
+  "kid": "1Ex_L14uWxePPxmGPdkoT2R4cj8RS5X9bjX_zt1UYPs",
   "private_jwk": {
     "kty": "EC",
     "crv": "P-256",
-    "x": "sgY9PdgHTDWEUik0FsMvFAdALQovgvn_n2R61V2f2UM",
-    "y": "-Ya0LDqVbEfRvQg7x5NVkQTRaFdn_PyUC8tI5bbc2Dk",
-    "d": "PSSUwEPoMFUYqVmVIpbEV7rkqs55I_bMPrdMn4oDUMs"
+    "x": "_PRAqTO1EC_Syg-9nJeojY7KEeHl5aLDcVQDkdzDPVk",
+    "y": "850hf82VDjz0La8xTWLzFAEDxcCfb6lR7Ztgcbj1KYo",
+    "d": "OJZGG0sCHZ4wxjZMNRlQKpYMFYDzOLvxSTcr1bttRbE"
   },
   "public_jwk": {
     "kty": "EC",
     "crv": "P-256",
-    "x": "sgY9PdgHTDWEUik0FsMvFAdALQovgvn_n2R61V2f2UM",
-    "y": "-Ya0LDqVbEfRvQg7x5NVkQTRaFdn_PyUC8tI5bbc2Dk"
+    "x": "_PRAqTO1EC_Syg-9nJeojY7KEeHl5aLDcVQDkdzDPVk",
+    "y": "850hf82VDjz0La8xTWLzFAEDxcCfb6lR7Ztgcbj1KYo"
   },
-  "plaintext": "{\"text\":\"Hello from jwcrypto. Sphinx of black quartz, judge my vow.\",\"attachments\":[{\"name\":\"note.md\",\"media_type\":\"text/markdown\",\"data\":\"IyBub3RlCg==\"}]}",
-  "protected": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImVwayI6eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6Ikh0NWNDcWJVUEExdkVwV2cxQlVjUXdwWFB0ZnZxU3BTRXJNU2E1MmMxQ0UiLCJ5IjoiMUZKaWpqcXdlOURteXg1ckJJOWxHYWJzbU54OXJWNXBuamVNTjJXOG83YyJ9LCJraWQiOiIzYXZSdDdGVFNkb2hPUnJRLTFpWXhIWmJXUDFaQjBuMFB3VlZrZTJWcWdrIn0",
+  "plaintext": "{\"text\":\"Hello from jwcrypto. Sphinx of black quartz, judge my vow.\"}",
   "protected_header": {
     "alg": "ECDH-ES",
     "enc": "A256GCM",
     "epk": {
       "crv": "P-256",
       "kty": "EC",
-      "x": "Ht5cCqbUPA1vEpWg1BUcQwpXPtfvqSpSErMSa52c1CE",
-      "y": "1FJijjqwe9Dmyx5rBI9lGabsmNx9rV5pnjeMN2W8o7c"
+      "x": "epAXJs7OR-eCN2W_gz0D9PMtPCRZRekdk1Hh7MNDSzY",
+      "y": "C4cGXwx7EixfqVpw8DCj5u9fra7FczAAAPmlKDVULc0"
     },
-    "kid": "3avRt7FTSdohORrQ-1iYxHZbWP1ZB0n0PwVVke2Vqgk"
+    "kid": "1Ex_L14uWxePPxmGPdkoT2R4cj8RS5X9bjX_zt1UYPs"
   },
-  "iv": "PaGxBYlpKpwQmHmR",
-  "ciphertext": "A-Kub0-dNF3264du8y_dIl7P_V4dNoJAn2_LmD0a0wOTrrPIXpx05h3ga-QN9TLbPK2UeycUtCxoeIrEzIXKxikCV1kKRYkqzBZSp4oD_X2Ucxx5Jx-98PSZ1AB4Dk0ztwvgCrTojqTNxAHIAfgDQ45sOj3ZrbeBwHHbnoC3--dm2AaBBThVF7Z-uTvh7FuEEUgsnrWU8gO-_KM",
-  "tag": "lKhJn6ArzjM71KrLN9PYmA",
-  "compact": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImVwayI6eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6Ikh0NWNDcWJVUEExdkVwV2cxQlVjUXdwWFB0ZnZxU3BTRXJNU2E1MmMxQ0UiLCJ5IjoiMUZKaWpqcXdlOURteXg1ckJJOWxHYWJzbU54OXJWNXBuamVNTjJXOG83YyJ9LCJraWQiOiIzYXZSdDdGVFNkb2hPUnJRLTFpWXhIWmJXUDFaQjBuMFB3VlZrZTJWcWdrIn0..PaGxBYlpKpwQmHmR.A-Kub0-dNF3264du8y_dIl7P_V4dNoJAn2_LmD0a0wOTrrPIXpx05h3ga-QN9TLbPK2UeycUtCxoeIrEzIXKxikCV1kKRYkqzBZSp4oD_X2Ucxx5Jx-98PSZ1AB4Dk0ztwvgCrTojqTNxAHIAfgDQ45sOj3ZrbeBwHHbnoC3--dm2AaBBThVF7Z-uTvh7FuEEUgsnrWU8gO-_KM.lKhJn6ArzjM71KrLN9PYmA"
+  "compact": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImVwayI6eyJjcnYiOiJQLTI1NiIsImt0eSI6IkVDIiwieCI6ImVwQVhKczdPUi1lQ04yV19nejBEOVBNdFBDUlpSZWtkazFIaDdNTkRTelkiLCJ5IjoiQzRjR1h3eDdFaXhmcVZwdzhEQ2o1dTlmcmE3RmN6QUFBUG1sS0RWVUxjMCJ9LCJraWQiOiIxRXhfTDE0dVd4ZVBQeG1HUGRrb1QyUjRjajhSUzVYOWJqWF96dDFVWVBzIn0..BVTbSM89LObvk5lw.WlX136zEZxXRedHjRVskZBrfinlzLBY5VfFOvlCUD1UdrfQt-xXEKYXaiUA3-FTepqBbfBFgmOp7zt_M8hCINuq0meJw.ktWBg_N_S6sS_MkAX0ltDQ"
 }
