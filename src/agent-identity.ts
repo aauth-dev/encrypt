@@ -60,7 +60,10 @@ export async function agentToken(env: Env): Promise<string> {
   const exp = now + LIFETIME_S
   const jwt = await signJWT(
     { alg: 'Ed25519', typ: 'aa-agent+jwt', kid: signingPub.kid },
-    { iss: env.ORIGIN, dwk: 'aauth-agent.json', sub: agentSub(env.ORIGIN), cnf: { jwk: cnf }, iat: now, exp },
+    // jti is REQUIRED on an agent token: Hellō answers 401 without one since Wallet
+    // 2026.9.24 (#4302), and looks it up in its revocation list. It is not a replay
+    // nonce, so the cached token is presented for its whole lifetime.
+    { iss: env.ORIGIN, dwk: 'aauth-agent.json', sub: agentSub(env.ORIGIN), jti: crypto.randomUUID(), cnf: { jwk: cnf }, iat: now, exp },
     privateKey,
   )
   cached = { jwt, exp }

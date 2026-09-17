@@ -63,6 +63,8 @@ describe('public surface', () => {
     expect(payload.sub).toBe(agentSub(RESOURCE))
     expect(payload.sub).toBe('aauth:send@encrypt.aauth.dev')
     expect(payload.dwk).toBe('aauth-agent.json')
+    // Required by Hellō since Wallet 2026.9.24 (#4302): 401 without one.
+    expect(payload.jti).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
     expect((payload.cnf as { jwk: JsonWebKey }).jwk.x).toBe((JSON.parse(env.AGENT_KEY) as JsonWebKey).x)
   })
   it('OpenAPI has sendMessage: from, to, text required; resource optional, its default from DEFAULT_RESOURCE (Q6, Q7)', async () => {

@@ -171,6 +171,8 @@ export class FakePS {
     if (typeof agent.iss !== 'string' || agent.dwk !== 'aauth-agent.json' || typeof agent.sub !== 'string' || !/^aauth:[A-Za-z0-9\-_+.]+@[^@\s]+$/.test(agent.sub)) {
       return problem(401, 'invalid_agent_token', 'iss, dwk aauth-agent.json, and sub aauth:local@domain are required')
     }
+    // Hellō requires jti on an agent token since Wallet 2026.9.24 (#4302): 401 without one.
+    if (typeof agent.jti !== 'string' || !agent.jti) return problem(401, 'invalid_agent_token', 'jti required')
     const cnf = (agent.cnf as { jwk?: JsonWebKey } | undefined)?.jwk
     if (!cnf) return problem(401, 'invalid_agent_token', 'cnf.jwk required')
     // The issuer's agent document and JWKS, through SELF: the issuer is the Worker under test.
