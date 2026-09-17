@@ -1,31 +1,37 @@
 # encrypt.aauth.dev
 
-> Sends an end-to-end encrypted message for an agent: it takes the messaging service, the recipient, and the text; fetches the recipient's key from that service, encrypts (JWE ECDH-ES A256GCM, P-256), and delivers the ciphertext there, acting for the person over an AAuth call chain. An AAuth resource (access_mode: person-token). Stateless; sees the plaintext, stores nothing. Open code, self-hostable.
+> A send service. Sends an end-to-end encrypted message for an agent: it takes the sender's address, the recipient, and the text; fetches the recipient's latest key from the messaging service, encrypts (a compact JWE, ECDH-ES A256GCM, P-256), and uploads the JWE there, acting for the person over an AAuth call chain. An AAuth resource (access_mode: person-token). Stateless; sees the plaintext, stores nothing. Open code, self-hostable.
 
-Reach it with the AAuth MCP: `connect_resources [{resource: "encrypt.aauth.dev"}]` (the person approves one card; this service sees plaintext), then `invoke sendMessage`.
+Reach it with the AAuth MCP: `connect_resources {items: [{resource: "encrypt.aauth.dev"}]}` (the person approves one card; this service sees plaintext), then `invoke {resource: "encrypt.aauth.dev", op_id: "sendMessage", body: {from, to, text}}`. Put the fields directly in `body`.
+
+A person's account at the messaging service names their send service as `send_message_with {resource, op_id}`. This host is the default for secret.agent.coop.
 
 ## The operation
 
-`sendMessage {resource, to, text, from?, idempotency_key?}`
+`sendMessage {from, to, text, resource?, idempotency_key?}`
 
-- `resource`: the messaging service to deliver through, as an https origin. Required. The default for agent.coop is `https://secret.agent.coop`; a person using another messaging service names it here.
-- `to`: the recipient's identifier URI as that service knows it, e.g. `mailto:bob@example.com`.
+- `from`: required. One of the sender's addresses at the messaging service, e.g. `mailto:you@example.com`, in any spelling.
+- `to`: the recipient's address there: `peer_address` on the connection.
 - `text`: the message, up to 64 KB. Text only (no attachments yet).
-- `from`: one of the sender's identifier URIs at that service, optional.
-- `idempotency_key`: optional; a repeat with the same key returns the original.
+- `resource`: the messaging service to deliver through, as an https origin. Optional; the default is `https://secret.agent.coop`. A person using another messaging service names it here.
+- `idempotency_key`: optional; a repeat with the same key returns the first message with `replayed: true`.
 
-Returns `{id, to, from, kid, size, resource}`. Refusals from the messaging service pass through with `step`: `not_connected` (404: the person must invite them first), `recipient_has_no_key` (409: they have not finished onboarding), `rate_limited` (429). `text_too_long` (413) and `attachments_not_supported` (400) are this service's. A 502 means the chain failed (`error` is the Person Server's code, or `resource_unreachable`).
+Returns `{id, from, to, kid, size, resource}`, with `from` and `to` as the messaging service shows them.
 
-The recipient reads with `getMessages` and `getMessage` at the messaging service, then `decryptEnvelope` at https://decrypt.aauth.dev.
+What it does: a person token for `resource` over the chain; `getPublicKey {from, to}` there; encrypt `{"text": …}`; `uploadMessage {from, to, jwe}` there. If the recipient rotated their key in between (`409 key_rotated`), it fetches the key again and retries once.
+
+Refusals from the messaging service pass through with `step: get_public_key | upload_message`: `not_connected` (404: the person must invite them first), `recipient_has_no_key` (409: they have not finished createAccount), `rate_limited` (429), `invalid_request` with `field: from` (400: not one of the sender's addresses). `text_too_long` (413) and `attachments_not_supported` (400) are this service's. A 502 with `step: person_token` means the Person Server refused a token for `resource` (`error` is its code); `resource_unreachable` means the messaging service did not answer.
+
+The recipient reads with `listMessages` at the messaging service, then `readMessage {id}` at their read service (default https://decrypt.aauth.dev).
 
 ## Links
 
 - Metadata: https://encrypt.aauth.dev/.well-known/aauth-resource.json
-- Agent document (call chaining): https://encrypt.aauth.dev/.well-known/aauth-agent.json
+- Agent document (call chaining, `aauth:send@encrypt.aauth.dev`): https://encrypt.aauth.dev/.well-known/aauth-agent.json
 - OpenAPI: https://encrypt.aauth.dev/openapi.json
 - Privacy: https://encrypt.aauth.dev/privacy
 - Code and self-hosting: https://github.com/aauth-dev/encrypt
-- Container format and vectors: https://github.com/aauth-dev/decrypt/blob/main/spec/container.md
+- Message format and vectors: https://github.com/aauth-dev/decrypt/blob/main/spec/container.md
 - The default messaging service: https://secret.agent.coop/llms.txt
-- The matching decrypt service: https://decrypt.aauth.dev/llms.txt
+- The matching read service: https://decrypt.aauth.dev/llms.txt
 - Contact: feedback@agent.coop · abuse@agent.coop
