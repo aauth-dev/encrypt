@@ -18,7 +18,8 @@ check "aauth-agent.json issuer matches origin and names the jwks" "$(echo "$AGEN
 JWKS=$(curl -sf "$BASE/.well-known/jwks.json")
 check "jwks key is Ed25519 with a kid, no private material" "$(echo "$JWKS" | jq -e '.keys[0].crv == "Ed25519" and .keys[0].alg == "Ed25519" and .keys[0].d == null and (.keys[0].kid | length > 0)' >/dev/null 2>&1 && echo true || echo false)"
 SPEC=$(curl -sf "$BASE/openapi.json")
-check "openapi lists sendMessage with resource required" "$(echo "$SPEC" | jq -e '.paths["/send"].post.operationId == "sendMessage" and (.paths["/send"].post.requestBody.content["application/json"].schema.required | index("resource")) != null' >/dev/null 2>&1 && echo true || echo false)"
+check "openapi lists sendMessage: from, to, text required; resource optional (D27 6a)" "$(echo "$SPEC" | jq -e '.paths["/send"].post.operationId == "sendMessage" and (.paths["/send"].post.requestBody.content["application/json"].schema.required == ["from","to","text"])' >/dev/null 2>&1 && echo true || echo false)"
+check "openapi.json has Cache-Control max-age=300 and an ETag (12c)" "$(curl -s -D - -o /dev/null "$BASE/openapi.json" | tr -d '\r' | tr 'A-Z' 'a-z' | awk '/^cache-control: public, max-age=300$/{c=1} /^etag: "/{e=1} END{print (c&&e)?"true":"false"}')"
 for p in / /privacy /robots.txt /llms.txt /sitemap.xml /health; do check "GET $p is 200" "$([ "$(code "$BASE$p")" = "200" ] && echo true || echo false)"; done
 H=$(curl -s -D - -o /dev/null -X POST -H 'content-type: application/json' -d '{}' "$BASE/send")
 check "unsigned POST /send is 401 requirement=person-token" "$(echo "$H" | grep -q '^HTTP/[0-9.]* 401' && echo "$H" | grep -qi 'aauth-requirement: requirement=person-token' && echo true || echo false)"
