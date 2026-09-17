@@ -3,6 +3,7 @@
 // token): sendMessage. Stateless.
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { cachedDocument } from './cached-document'
 import { agentDocument } from './agent-identity'
 import { requireIdentity } from './auth'
 import { getPublicJWK } from './crypto'
@@ -20,11 +21,11 @@ app.onError((err, c) => {
   return c.json({ error: 'internal_error' }, 500)
 })
 
-app.use('*', cors({ origin: '*', exposeHeaders: ['AAuth-Requirement', 'Signature-Error', 'Accept-Signature', 'Accept-Signature-Scheme', 'Accept-Signature-Alg'] }))
+app.use('*', cors({ origin: '*', exposeHeaders: ['ETag', 'AAuth-Requirement', 'Signature-Error', 'Accept-Signature', 'Accept-Signature-Scheme', 'Accept-Signature-Alg'] }))
 
 app.get('/.well-known/aauth-resource.json', (c) => {
   const origin = c.env.ORIGIN
-  return c.json({
+  return cachedDocument(c, {
     issuer: origin,
     jwks_uri: `${origin}/.well-known/jwks.json`,
     name: new URL(origin).host,
@@ -39,7 +40,7 @@ app.get('/.well-known/aauth-resource.json', (c) => {
 // agent token against jwks_uri.
 app.get('/.well-known/aauth-agent.json', (c) => c.json(agentDocument(c.env.ORIGIN)))
 app.get('/.well-known/jwks.json', async (c) => c.json({ keys: [await getPublicJWK(c.env.SIGNING_KEY)] }))
-app.get('/openapi.json', (c) => c.json(openapi(c.env)))
+app.get('/openapi.json', (c) => cachedDocument(c, openapi(c.env)))
 app.get('/health', (c) => c.json({ status: 'ok', service: c.env.SERVICE }))
 
 app.post('/send', requireIdentity, sendMessage)
