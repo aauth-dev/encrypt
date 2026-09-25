@@ -6,7 +6,9 @@
 // wants a card; that is an error for this cut. Tokens are never logged.
 import { createSignedFetch, requestPersonToken, PersonTokenError } from '@aauth/agent'
 import type { FetchLike, PersonServerMetadata } from '@aauth/agent'
+import { loggedFetch } from '@aauth/call-log'
 import { agentKeyMaterial, personKeyMaterial } from './agent-identity'
+import { callerHost } from './call-log'
 import { b64urlDecode } from './util'
 import type { Env } from './types'
 
@@ -38,10 +40,13 @@ function issuerOf(jwt: string): string | null {
  * over the chain. Returns the failure instead of throwing when the PS
  * refuses; the route reports it.
  */
-export async function chainedFetch(env: Env, upstreamToken: string, resource: string): Promise<{ ok: true; fetch: FetchLike } | ({ ok: false } & ChainFailure)> {
+export async function chainedFetch(env: Env, upstreamToken: string, resource: string, ctx?: { waitUntil(p: Promise<unknown>): void }): Promise<{ ok: true; fetch: FetchLike } | ({ ok: false } & ChainFailure)> {
   const ps = issuerOf(upstreamToken)
   if (!ps) return { ok: false, error: 'invalid_upstream_token', detail: 'the presented token has no iss' }
-  const psFetch = createSignedFetch(agentKeyMaterial(env), { signBody: true })
+  // Both fetches log themselves (@aauth/call-log): the PS call and the calls to
+  // the resource, each under the call being handled as `parent`.
+  const host = callerHost(env, ctx)
+  const psFetch = loggedFetch((onSigned) => createSignedFetch(agentKeyMaterial(env), { signBody: true, onSigned }), host, { to_role: 'ps' })
   const guarded: FetchLike = async (url, init) => {
     const res = await psFetch(url, init)
     if (res.status === 202) throw new InteractionRequired()
@@ -56,7 +61,7 @@ export async function chainedFetch(env: Env, upstreamToken: string, resource: st
       resource,
       upstreamToken,
     })
-    return { ok: true, fetch: createSignedFetch(personKeyMaterial(env, personToken)) }
+    return { ok: true, fetch: loggedFetch((onSigned) => createSignedFetch(personKeyMaterial(env, personToken), { onSigned }), host, { to_role: 'resource' }) }
   } catch (err) {
     metadataCache.delete(ps)
     if (err instanceof PersonTokenError) return { ok: false, error: err.error ?? `http_${err.status}`, detail: err.detail ?? err.message }
