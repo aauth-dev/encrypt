@@ -12,6 +12,7 @@ import {
   generateAcceptSignatureAlgHeader,
 } from '@hellocoop/httpsig'
 import { AAuthTokenError, TOKEN_TYP, buildAAuthHeader, verifyToken, type VerifiedAuthToken, type VerifiedPersonToken } from '@aauth/resource'
+import { nameAgent } from '@aauth/call-log'
 import { emitVerifyFailed } from './events'
 import type { HonoEnv } from './types'
 
@@ -73,6 +74,8 @@ export const requireIdentity: MiddlewareHandler<HonoEnv> = async (c, next) => {
   }
   try {
     const verified = await verifyToken({ jwt: sig.jwt.raw, httpSignatureThumbprint: sig.thumbprint, resource: c.env.ORIGIN, accept })
+    // The call record names the agent when the token does (agent_id: a Hellō PS passthrough claim; agent: the access server's).
+    nameAgent([verified.claims.agent_id, verified.claims.agent].find((v): v is string => typeof v === 'string'))
     if (verified.type === 'person') {
       const v = verified as VerifiedPersonToken
       c.set('identity', { iss: v.iss, sub: v.sub, kind: 'person', jwt: sig.jwt.raw, thumbprint: sig.thumbprint })
