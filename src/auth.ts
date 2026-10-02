@@ -11,9 +11,10 @@ import {
   generateAcceptSignatureSchemeHeader,
   generateAcceptSignatureAlgHeader,
 } from '@hellocoop/httpsig'
-import { AAuthTokenError, TOKEN_TYP, buildAAuthHeader, verifyToken, type VerifiedAuthToken, type VerifiedPersonToken } from '@aauth/resource'
+import { AAuthTokenError, REVOKED_JWT, TOKEN_TYP, buildAAuthHeader, verifyToken, type VerifiedAuthToken, type VerifiedPersonToken } from '@aauth/resource'
 import { nameAgent } from '@aauth/call-log'
 import { emitVerifyFailed } from './events'
+import { revocationStore } from './revocation'
 import type { HonoEnv } from './types'
 
 // {resource, to, text ≤ 64 KB, from?, idempotency_key?} as JSON: 64 KB of text is at most 4× that as escaped JSON.
@@ -73,7 +74,7 @@ export const requireIdentity: MiddlewareHandler<HonoEnv> = async (c, next) => {
     return c.json({ error: 'person_token_required', detail: `cannot serve a ${String(typ)} here` }, 401, { 'AAuth-Requirement': buildAAuthHeader('person-token') })
   }
   try {
-    const verified = await verifyToken({ jwt: sig.jwt.raw, httpSignatureThumbprint: sig.thumbprint, resource: c.env.ORIGIN, accept })
+    const verified = await verifyToken({ jwt: sig.jwt.raw, httpSignatureThumbprint: sig.thumbprint, resource: c.env.ORIGIN, accept, revocation: revocationStore(c.env) })
     // The call record names the agent when the token does (agent_id: a Hellō PS passthrough claim; agent: the access server's).
     nameAgent([verified.claims.agent_id, verified.claims.agent].find((v): v is string => typeof v === 'string'))
     if (verified.type === 'person') {
@@ -86,7 +87,11 @@ export const requireIdentity: MiddlewareHandler<HonoEnv> = async (c, next) => {
   } catch (err) {
     if (err instanceof AAuthTokenError) {
       emitVerifyFailed(c, err.code, { detail: err.message })
-      return c.json({ error: err.code, detail: err.message }, 401, { 'AAuth-Requirement': buildAAuthHeader('person-token') })
+      const headers: Record<string, string> = { 'AAuth-Requirement': buildAAuthHeader('person-token') }
+      // Revoked by its issuer (revocation.ts): the token verified, so say so
+      // in Signature-Error; a fresh person token restarts the flow.
+      if (err.code === REVOKED_JWT) headers['Signature-Error'] = generateSignatureErrorHeader({ error: REVOKED_JWT })
+      return c.json({ error: err.code, detail: err.message }, 401, headers)
     }
     throw err
   }

@@ -23,6 +23,9 @@
     "DEFAULT_RESOURCE": "https://secret.agent.coop"
   },
 
+  // The token revocation list (src/revocation.ts): revoked:{iss}:{jti}, TTL to the token's exp.
+  "kv_namespaces": [{ "binding": "REVOCATION", "id": "fcf3df3b9d41401fa2a277f1cecce735" }],
+
   // Events → Freezer through the shared aauth-events queue (plan item T),
   // consumed by shipper.aauth.dev. Same as secret and decrypt.
   "queues": { "producers": [{ "queue": "aauth-events", "binding": "EVENTS_QUEUE" }] }
