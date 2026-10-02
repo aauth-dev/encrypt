@@ -15,7 +15,7 @@ chain to a fake at a made-up host.
 
 - A Cloudflare Worker, an [AAuth](https://aauth.dev) resource with `access_mode: person-token`,
   and an AAuth agent toward the messaging service (`/.well-known/aauth-agent.json`,
-  `aauth:send@<host>`). Stateless: no D1, no R2, no KV. In secret.agent.coop's terms it is a
+  `aauth:send@<host>`). Stateless but for one KV namespace, the token revocation list. In secret.agent.coop's terms it is a
   **send service** (plan D27): a person's account names theirs as `send_message_with`.
 - `POST /send` (`sendMessage`) `{from, to, text, resource?, idempotency_key?}`:
   1. verifies the caller's person token (audience this service);
@@ -33,6 +33,13 @@ chain to a fake at a made-up host.
   pass through with their status and `step: get_public_key | upload_message`. `text_too_long` (413)
   and `attachments_not_supported` (400) are this service's. `502` with `step: person_token` when the
   Person Server refuses the chain.
+- `POST /aauth/revoke` (`revocation_endpoint`, AAuth -11 §Token Revocation): the Person Server
+  that issued a token revokes it with `{jti, exp}`, signed as itself (`Signature-Key: sig=jwks_uri`,
+  covering `content-type` and `content-digest`). The issuer is the verified signer, so a caller
+  revokes only its own tokens; the list is keyed `(iss, jti)` until `exp`. Accepted callers are
+  `REVOCATION_ISSUERS` (default `person.hello.coop`, `person.hello-beta.net`, `access.aauth.dev`);
+  anyone else is `403 unsupported_iss`. A revoked token is then refused with `401`,
+  `Signature-Error: error=revoked_jwt` and `requirement=person-token`.
 - It sees the plaintext of each message and the recipient's address, holds a token in the person's
   name for the messaging service for the length of the call, and stores nothing. Events carry a
   hash of the identity, the size, the key id, the messaging service, and the message id: never
@@ -59,6 +66,7 @@ and `readMessage {id}` at their read service (default decrypt.aauth.dev). The fu
 npm install
 npm run generate-key | npx wrangler secret put SIGNING_KEY
 npm run generate-key | npx wrangler secret put AGENT_KEY
+npx wrangler kv namespace create my-encrypt-revocation   # its id is the REVOCATION binding in wrangler.jsonc
 npx wrangler deploy                              # set your own route / custom domain in wrangler.jsonc
 ```
 

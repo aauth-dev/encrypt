@@ -245,6 +245,25 @@ export class FakePS {
   }
 
   /**
+   * POST a revocation to `url` (§Token Revocation), signed as this PS
+   * (sig=jwks_uri, dwk aauth-person.json), covering content-type and
+   * content-digest unless `components` says otherwise.
+   */
+  async revoke(url: string, body: unknown, components = ['@method', '@authority', '@path', 'signature-key', 'content-type', 'content-digest']): Promise<Response> {
+    const text = JSON.stringify(body)
+    const { headers } = await httpsigFetch(url, {
+      dryRun: true,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: text,
+      components,
+      signingKey: this.key.privateJwk,
+      signatureKey: { type: 'jwks_uri', id: this.iss, kid: this.key.publicJwk.kid, dwk: 'aauth-person.json' },
+    })
+    return SELF.fetch(url, { method: 'POST', headers: headers as HeadersInit, body: text })
+  }
+
+  /**
    * POST /aauth/token/auth, in-process. Verifies the resource token against
    * the resource's JWKS (fetched through SELF), checks presented_jti, then
    * issues an auth token for the requested scope. Auto-approves.

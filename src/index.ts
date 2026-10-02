@@ -11,6 +11,7 @@ import { emit } from './events'
 import { openapi } from './openapi'
 import { sendMessage } from './send'
 import { callLog } from './call-log'
+import { handleRevoke } from './revocation'
 import type { HonoEnv } from './types'
 
 const app = new Hono<HonoEnv>()
@@ -37,6 +38,8 @@ app.get('/.well-known/aauth-resource.json', (c) => {
     r3_vocabularies: { 'urn:aauth:vocabulary:openapi': `${origin}/openapi.json` },
     contact: { feedback: 'feedback@agent.coop', abuse: 'abuse@agent.coop' },
     llms_txt: `${origin}/llms.txt`,
+    // Where the person server that issued a token for this service revokes it (revocation.ts).
+    revocation_endpoint: `${origin}/aauth/revoke`,
   })
 })
 // encrypt is an agent toward the messaging service (D26). A PS verifies the
@@ -47,5 +50,6 @@ app.get('/openapi.json', (c) => cachedDocument(c, openapi(c.env)))
 app.get('/health', (c) => c.json({ status: 'ok', service: c.env.SERVICE }))
 
 app.post('/send', requireIdentity, sendMessage)
+app.post('/aauth/revoke', handleRevoke)
 
 export default { fetch: app.fetch }
