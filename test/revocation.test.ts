@@ -4,9 +4,9 @@
 // requirement=person-token.
 import { beforeAll, describe, expect, it } from 'vitest'
 import { SELF } from 'cloudflare:test'
-import { clearMetadataCache } from '@aauth/resource'
 import { decodeJwt } from 'jose'
 import { Agent, FakePS, RESOURCE, now } from './fake-ps'
+import { clearKeyCache } from '../src/key-resolver'
 
 const REVOKE = `${RESOURCE}/aauth/revoke`
 const ALICE = { handle: 'alice', email: 'alice@example.com' }
@@ -25,7 +25,7 @@ beforeAll(async () => {
   ps = await new FakePS().init()
   otherPs = await new FakePS('https://other-ps.fake.test').init()
   alice = await new Agent(ps, ALICE, RESOURCE).init()
-  clearMetadataCache()
+  clearKeyCache()
 })
 
 describe('POST /aauth/revoke', () => {

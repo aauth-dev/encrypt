@@ -79,6 +79,12 @@ export function installMockFetch(): void {
   }) as typeof fetch
 }
 
+/** Serve `url` from the outbound mock with `handler`. */
+export function mockRoute(url: string, handler: RouteHandler): void {
+  installMockFetch()
+  routes.set(url, handler)
+}
+
 /** RFC 9421 verification of a mocked outbound request, jwt scheme. */
 async function verifySigned(req: Request, opts: { requireContentDigest?: boolean } = {}) {
   const url = new URL(req.url)

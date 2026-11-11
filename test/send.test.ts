@@ -8,10 +8,10 @@
 // the interop vectors' keys.
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { SELF, env } from 'cloudflare:test'
-import { clearMetadataCache } from '@aauth/resource'
 import { compactDecrypt, decodeProtectedHeader, importJWK, jwtVerify } from 'jose'
 import { Agent, FakePS, FakeSecret, PS, RESOURCE, SECRET } from './fake-ps'
 import { agentSub, agentToken, resetAgentTokenCache } from '../src/agent-identity'
+import { clearKeyCache } from '../src/key-resolver'
 import { encryptCompact, publicP256 } from '../src/jwe'
 import { MAX_PLAINTEXT, parseResource } from '../src/send'
 import joseVector from '../spec/vectors/jose.json'
@@ -40,7 +40,7 @@ beforeAll(async () => {
   ps = await new FakePS().init()
   secret = new FakeSecret(ps)
   alice = await new Agent(ps, ALICE, RESOURCE).init()
-  clearMetadataCache()
+  clearKeyCache()
 })
 
 describe('public surface', () => {

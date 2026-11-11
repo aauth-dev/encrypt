@@ -14,6 +14,7 @@ import {
 import { AAuthTokenError, REVOKED_JWT, TOKEN_TYP, buildAAuthHeader, verifyToken, type VerifiedAuthToken, type VerifiedPersonToken } from '@aauth/resource'
 import { nameAgent } from '@aauth/call-log'
 import { emitVerifyFailed } from './events'
+import { keyResolverFor } from './key-resolver'
 import { revocationStore } from './revocation'
 import type { HonoEnv } from './types'
 
@@ -40,14 +41,20 @@ export const requireIdentity: MiddlewareHandler<HonoEnv> = async (c, next) => {
   if (body === 'too_large') return c.json({ error: 'payload_too_large' }, 413)
   c.set('rawBody', body)
 
-  const sig = await httpSigVerify({
-    method: c.req.method,
-    authority: url.host,
-    path: url.pathname,
-    query: url.search ? url.search.slice(1) : undefined,
-    headers: c.req.raw.headers,
-    ...(body ? { body } : {}),
-  })
+  // One resolver for both lookups: the signature (jwt scheme here, so no
+  // fetch) and the token issuer's keys.
+  const keyResolver = keyResolverFor(c)
+  const sig = await httpSigVerify(
+    {
+      method: c.req.method,
+      authority: url.host,
+      path: url.pathname,
+      query: url.search ? url.search.slice(1) : undefined,
+      headers: c.req.raw.headers,
+      ...(body ? { body } : {}),
+    },
+    { keyResolver },
+  )
   if (!sig.verified) {
     const noSig = !c.req.header('signature') && !c.req.header('signature-input')
     if (noSig) {
@@ -74,7 +81,7 @@ export const requireIdentity: MiddlewareHandler<HonoEnv> = async (c, next) => {
     return c.json({ error: 'person_token_required', detail: `cannot serve a ${String(typ)} here` }, 401, { 'AAuth-Requirement': buildAAuthHeader('person-token') })
   }
   try {
-    const verified = await verifyToken({ jwt: sig.jwt.raw, httpSignatureThumbprint: sig.thumbprint, resource: c.env.ORIGIN, accept, revocation: revocationStore(c.env) })
+    const verified = await verifyToken({ jwt: sig.jwt.raw, httpSignatureThumbprint: sig.thumbprint, resource: c.env.ORIGIN, accept, revocation: revocationStore(c.env), keyResolver })
     // The call record names the agent when the token does (agent_id: a Hellō PS passthrough claim; agent: the access server's).
     nameAgent([verified.claims.agent_id, verified.claims.agent].find((v): v is string => typeof v === 'string'))
     if (verified.type === 'person') {

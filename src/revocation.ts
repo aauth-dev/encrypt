@@ -27,6 +27,7 @@ import {
 } from '@hellocoop/httpsig'
 import { KVRevocationStore, applyRevocation, revocationResponse, type RevocationStore } from '@aauth/resource'
 import { emit, emitVerifyFailed } from './events'
+import { keyResolverFor } from './key-resolver'
 import type { Env, HonoEnv } from './types'
 
 /** The servers whose revocations are honoured when REVOCATION_ISSUERS is unset: the Hellō person servers and access.aauth.dev. */
@@ -76,7 +77,7 @@ export async function handleRevoke(c: Context<HonoEnv>): Promise<Response> {
   }
   const sig = await httpSigVerify(
     { method: c.req.method, authority: url.host, path: url.pathname, headers: c.req.raw.headers, body },
-    { requireContentDigest: true },
+    { requireContentDigest: true, keyResolver: keyResolverFor(c) },
   )
   if (!sig.verified) {
     const headers: Record<string, string> = {}
